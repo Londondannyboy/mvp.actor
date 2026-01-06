@@ -1,8 +1,8 @@
 """
-Esports Jobs AI Agent - FastAPI Backend
+Esports Jobs AI Agent - Pydantic AI with AG-UI
 
-Provides two endpoints:
-1. /copilotkit - AG-UI protocol for CopilotKit frontend
+Endpoints:
+1. /agui - AG-UI protocol for CopilotKit frontend
 2. /chat/completions - OpenAI-compatible SSE for Hume CLM
 """
 
@@ -10,77 +10,164 @@ import os
 import json
 import uuid
 import time
+import asyncio
 from typing import Optional, List
+from textwrap import dedent
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from tools.job_search import search_jobs, get_job_by_id, get_available_categories, get_available_countries
-from tools.company_lookup import lookup_company, get_all_companies, search_companies_by_game
+from starlette.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent, RunContext
+from pydantic_ai.ag_ui import StateDeps
+from pydantic_ai.models.google import GoogleModel
+
+from tools.job_search import search_jobs, get_available_categories, get_available_countries
+from tools.company_lookup import lookup_company
 
 
-def simple_agent_response(user_message: str) -> str:
-    """Simple keyword-based response for MVP (no LLM needed)."""
-    msg_lower = user_message.lower()
-
-    # Check for job search keywords
-    if any(word in msg_lower for word in ['job', 'jobs', 'find', 'search', 'looking', 'work', 'career', 'hire', 'hiring']):
-        # Determine category from message
-        category = None
-        if 'marketing' in msg_lower:
-            category = 'marketing'
-        elif 'coach' in msg_lower:
-            category = 'coaching'
-        elif 'produc' in msg_lower:
-            category = 'production'
-        elif 'content' in msg_lower:
-            category = 'content'
-        elif 'manage' in msg_lower:
-            category = 'management'
-        elif 'operation' in msg_lower:
-            category = 'operations'
-
-        results = search_jobs(category=category, limit=5)
-        if results:
-            jobs_text = []
-            for job in results:
-                jobs_text.append(f"**{job.title}** at {job.company}\n- Location: {job.location}\n- Type: {job.type}\n- Salary: {job.salary}\n- Apply: {job.url}")
-            return f"Here are {len(results)} esports jobs I found:\n\n" + "\n\n".join(jobs_text)
-        return "I couldn't find any jobs matching your criteria. Try asking about a specific category like marketing, coaching, or production."
-
-    # Check for company keywords
-    company_names = ['team liquid', 'riot', 'fnatic', 'cloud9', 'g2', '100 thieves', 'logitech', 'octagon', 'garena']
-    for company in company_names:
-        if company in msg_lower:
-            profile = lookup_company(company)
-            if profile:
-                return f"**{profile.name}**\n\n{profile.description}\n\n- Headquarters: {profile.headquarters}\n- Founded: {profile.founded}\n- Games: {', '.join(profile.games)}\n- Careers: {profile.careers_url}"
-
-    # Check for category/country info
-    if 'categor' in msg_lower:
-        categories = get_available_categories()
-        return f"Available job categories in esports: {', '.join(categories)}"
-
-    if 'countr' in msg_lower or 'where' in msg_lower:
-        countries = get_available_countries()
-        return f"We have esports jobs in these countries: {', '.join(countries)}"
-
-    # Default greeting
-    return "Welcome to EsportsJobs.quest! I can help you find esports jobs. Try asking me:\n\n- 'Find me esports marketing jobs'\n- 'What coaching jobs are available?'\n- 'Tell me about Team Liquid'\n- 'What job categories are there?'"
+# =====
+# State
+# =====
+class Job(BaseModel):
+    id: str = ""
+    title: str
+    company: str
+    location: str
+    type: str = "Full-time"
+    salary: str = "Competitive"
+    url: str = ""
 
 
-# FastAPI app
-app = FastAPI(
-    title="Esports Jobs Agent",
-    description="AI agent for finding esports jobs and career guidance",
-    version="1.0.0"
+class AppState(BaseModel):
+    jobs: list[Job] = Field(default_factory=list)
+    search_query: str = ""
+
+
+# =====
+# Pydantic AI Agent
+# =====
+agent = Agent(
+    model=GoogleModel('gemini-2.0-flash'),
+    deps_type=StateDeps[AppState],
+    system_prompt=dedent("""
+        You are an enthusiastic AI assistant for EsportsJobs.quest, helping users find careers in esports and gaming.
+
+        ## Your Tools - USE THEM!
+        You have these tools available:
+
+        | User asks about... | USE THIS TOOL |
+        |-------------------|---------------|
+        | jobs, positions, find work | search_esports_jobs |
+        | company info, who is X | lookup_esports_company |
+        | categories, types of jobs | get_categories |
+        | countries, locations | get_countries |
+
+        ## Your Personality
+        - Enthusiastic about esports! Use emojis: 🎮 🏆 🚀 💪
+        - Be specific with job details
+        - Always use your tools to provide real data
+        - Keep responses concise but helpful
+
+        ## Response Format
+        - Use bullet points for job listings
+        - Include company, location, and type
+        - Suggest next steps (apply, learn more)
+    """).strip()
 )
 
-# CORS middleware
-app.add_middleware(
+
+@agent.tool
+def search_esports_jobs(ctx: RunContext[StateDeps[AppState]], query: str = None, category: str = None, country: str = None) -> dict:
+    """Search for esports jobs. Use this when user asks for jobs or positions.
+
+    Args:
+        query: Free text search (title, company, skills)
+        category: Job category: coaching, marketing, production, management, content, operations
+        country: Country filter
+    """
+    print(f"🔍 Searching: query={query}, category={category}, country={country}")
+    results = search_jobs(query=query, category=category, country=country, limit=5)
+
+    # Update state
+    jobs = [Job(
+        id=job.id,
+        title=job.title,
+        company=job.company,
+        location=job.location,
+        type=job.type,
+        salary=job.salary,
+        url=job.url
+    ) for job in results]
+    ctx.deps.state.jobs = jobs
+    ctx.deps.state.search_query = query or category or "esports jobs"
+
+    return {
+        "jobs": [{"title": j.title, "company": j.company, "location": j.location, "type": j.type, "salary": j.salary, "url": j.url} for j in jobs],
+        "count": len(jobs),
+        "message": f"Found {len(jobs)} esports jobs!" if jobs else "No jobs found."
+    }
+
+
+@agent.tool
+def lookup_esports_company(ctx: RunContext[StateDeps[AppState]], company_name: str) -> dict:
+    """Get information about an esports company.
+
+    Args:
+        company_name: Company name (e.g., Team Liquid, Riot Games, Fnatic)
+    """
+    print(f"🏢 Looking up: {company_name}")
+    profile = lookup_company(company_name)
+
+    if not profile:
+        return {"found": False, "message": f"Company '{company_name}' not found in our database."}
+
+    return {
+        "found": True,
+        "company": {
+            "name": profile.name,
+            "description": profile.description,
+            "headquarters": profile.headquarters,
+            "founded": profile.founded,
+            "games": profile.games,
+            "achievements": profile.notable_achievements,
+            "careers_url": profile.careers_url
+        }
+    }
+
+
+@agent.tool
+def get_categories(ctx: RunContext[StateDeps[AppState]]) -> dict:
+    """Get list of available job categories in esports."""
+    categories = get_available_categories()
+    return {"categories": categories, "count": len(categories)}
+
+
+@agent.tool
+def get_countries(ctx: RunContext[StateDeps[AppState]]) -> dict:
+    """Get list of countries with available esports jobs."""
+    countries = get_available_countries()
+    return {"countries": countries, "count": len(countries)}
+
+
+# =====
+# AG-UI App (for CopilotKit)
+# =====
+ag_ui_app = agent.to_ag_ui(deps=StateDeps(AppState()))
+
+
+# =====
+# Main FastAPI App
+# =====
+main_app = FastAPI(
+    title="Esports Jobs Agent",
+    description="AI agent for finding esports jobs - Pydantic AI with AG-UI",
+    version="2.0.0"
+)
+
+main_app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -90,14 +177,23 @@ app.add_middleware(
 
 
 # Health check
-@app.get("/health")
+@main_app.get("/health")
 async def health():
-    """Health check endpoint."""
-    return {"status": "ok", "agent": "esports-jobs"}
+    return {"status": "ok", "agent": "esports-jobs", "version": "2.0"}
 
 
-# ----- Hume CLM Endpoint (OpenAI-compatible) -----
+@main_app.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "agent": "esports-jobs",
+        "endpoints": ["/agui (AG-UI for CopilotKit)", "/chat/completions (CLM for Hume)", "/health"]
+    }
 
+
+# =====
+# CLM Endpoint for Hume Voice
+# =====
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -107,60 +203,57 @@ class ChatCompletionRequest(BaseModel):
     messages: List[ChatMessage]
     model: Optional[str] = "esports-agent"
     stream: Optional[bool] = True
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 1024
 
 
-async def generate_openai_stream(messages: List[ChatMessage]):
-    """Generate OpenAI-compatible SSE stream."""
-    user_message = messages[-1].content if messages else ""
-
-    try:
-        response_text = simple_agent_response(user_message)
-        chunk_size = 20  # characters per chunk
-
-        for i in range(0, len(response_text), chunk_size):
-            chunk = response_text[i:i + chunk_size]
-            data = {
-                "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
-                "object": "chat.completion.chunk",
-                "created": int(time.time()),
-                "model": "esports-agent",
-                "choices": [{
-                    "index": 0,
-                    "delta": {"content": chunk},
-                    "finish_reason": None
-                }]
-            }
-            yield f"data: {json.dumps(data)}\n\n"
-
-        # Send done signal
-        done_data = {
-            "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+async def stream_sse_response(content: str, msg_id: str):
+    """Stream OpenAI-compatible SSE chunks for Hume EVI."""
+    words = content.split(' ')
+    for i, word in enumerate(words):
+        chunk = {
+            "id": msg_id,
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": "esports-agent",
             "choices": [{
                 "index": 0,
-                "delta": {},
-                "finish_reason": "stop"
+                "delta": {"content": word + (' ' if i < len(words) - 1 else '')},
+                "finish_reason": None
             }]
         }
-        yield f"data: {json.dumps(done_data)}\n\n"
-        yield "data: [DONE]\n\n"
+        yield f"data: {json.dumps(chunk)}\n\n"
+        await asyncio.sleep(0.01)
 
+    final = {
+        "id": msg_id,
+        "object": "chat.completion.chunk",
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+    }
+    yield f"data: {json.dumps(final)}\n\n"
+    yield "data: [DONE]\n\n"
+
+
+async def run_agent_for_clm(user_message: str) -> str:
+    """Run the Pydantic AI agent and return text response."""
+    try:
+        state = AppState()
+        deps = StateDeps(state)
+        result = await agent.run(user_message, deps=deps)
+
+        if hasattr(result, 'data') and result.data:
+            return str(result.data)
+        return str(result)
     except Exception as e:
-        error_data = {"error": {"message": str(e), "type": "agent_error"}}
-        yield f"data: {json.dumps(error_data)}\n\n"
+        print(f"[CLM] Agent error: {e}")
+        return "Sorry, I couldn't process that request. Try asking about esports jobs!"
 
 
-@app.post("/chat/completions")
-async def chat_completions(
+@main_app.post("/chat/completions")
+async def clm_endpoint(
     request: ChatCompletionRequest,
     authorization: Optional[str] = Header(None)
 ):
-    """OpenAI-compatible chat completions endpoint for Hume CLM."""
-    # Verify auth token
+    """OpenAI-compatible endpoint for Hume CLM."""
+    # Verify auth
     expected_secret = os.getenv("CLM_AUTH_SECRET")
     if expected_secret:
         if not authorization or not authorization.startswith("Bearer "):
@@ -169,14 +262,21 @@ async def chat_completions(
         if token != expected_secret:
             raise HTTPException(status_code=401, detail="Invalid authorization")
 
+    # Get user message
+    user_message = request.messages[-1].content if request.messages else ""
+    print(f"[CLM] Query: {user_message[:80]}")
+
+    # Run agent
+    response_text = await run_agent_for_clm(user_message)
+    print(f"[CLM] Response: {response_text[:80]}")
+
     if request.stream:
+        msg_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
         return StreamingResponse(
-            generate_openai_stream(request.messages),
+            stream_sse_response(response_text, msg_id),
             media_type="text/event-stream"
         )
     else:
-        user_message = request.messages[-1].content if request.messages else ""
-        response_text = simple_agent_response(user_message)
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
             "object": "chat.completion",
@@ -186,55 +286,15 @@ async def chat_completions(
                 "index": 0,
                 "message": {"role": "assistant", "content": response_text},
                 "finish_reason": "stop"
-            }],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+            }]
         }
 
 
-# ----- CopilotKit Endpoint (AG-UI protocol) -----
-from copilotkit.integrations.fastapi import add_fastapi_endpoint
-from copilotkit import CopilotKitRemoteEndpoint, Action
+# Mount AG-UI at /agui for CopilotKit
+main_app.mount("/agui", ag_ui_app)
 
-def copilotkit_search_jobs(query: str = None, category: str = None, country: str = None, job_type: str = None) -> dict:
-    """Search for esports jobs based on criteria."""
-    results = search_jobs(query=query, category=category, country=country, job_type=job_type, limit=5)
-    return {
-        "jobs": [{"id": job.id, "title": job.title, "company": job.company, "location": job.location, "type": job.type, "salary": job.salary, "skills": job.skills, "url": job.url} for job in results],
-        "count": len(results),
-        "message": f"Found {len(results)} jobs matching your criteria." if results else "No jobs found."
-    }
-
-def copilotkit_lookup_company(company_name: str) -> dict:
-    """Look up information about an esports company."""
-    profile = lookup_company(company_name)
-    if not profile:
-        return {"found": False, "message": f"Company '{company_name}' not found."}
-    return {"found": True, "company": {"name": profile.name, "description": profile.description, "headquarters": profile.headquarters, "founded": profile.founded, "games": profile.games, "achievements": profile.notable_achievements, "culture": profile.culture, "careers_url": profile.careers_url}}
-
-def copilotkit_get_categories() -> dict:
-    return {"categories": get_available_categories()}
-
-def copilotkit_get_countries() -> dict:
-    return {"countries": get_available_countries()}
-
-# Create CopilotKit SDK endpoint
-sdk = CopilotKitRemoteEndpoint(
-    actions=[
-        Action(name="search_jobs", description="Search for esports jobs by query, category, country, or job type.", handler=copilotkit_search_jobs, parameters=[
-            {"name": "query", "type": "string", "description": "Free text search (title, company, skills)"},
-            {"name": "category", "type": "string", "description": "Job category: coaching, marketing, production, management, content, operations"},
-            {"name": "country", "type": "string", "description": "Country filter"},
-            {"name": "job_type", "type": "string", "description": "Job type: Full-time, Part-time, Contract, Intern"},
-        ]),
-        Action(name="lookup_company", description="Get detailed information about an esports company.", handler=copilotkit_lookup_company, parameters=[
-            {"name": "company_name", "type": "string", "description": "Company name (e.g., Team Liquid, Riot Games)", "required": True},
-        ]),
-        Action(name="get_job_categories", description="Get a list of all available job categories in esports.", handler=copilotkit_get_categories, parameters=[]),
-        Action(name="get_job_countries", description="Get a list of countries with available esports jobs.", handler=copilotkit_get_countries, parameters=[]),
-    ]
-)
-
-add_fastapi_endpoint(app, sdk, "/copilotkit")
+# Export app
+app = main_app
 
 
 if __name__ == "__main__":
