@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 
 export function CopilotProvider({ children }: { children: ReactNode }) {
   return (
-    <CopilotKit runtimeUrl="/api/copilotkit">
+    <CopilotKit runtimeUrl="/api/copilotkit" agent="esports_agent">
       {children}
     </CopilotKit>
   );
