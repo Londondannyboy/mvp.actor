@@ -39,31 +39,35 @@ _cached_user_context: dict = {}
 
 
 def extract_user_from_instructions(instructions: str) -> dict:
-    """Extract user info from CopilotKit instructions text."""
+    """Extract user info from CopilotKit instructions or Hume system prompt."""
     result = {"user_id": None, "name": None, "email": None}
 
     if not instructions:
         return result
 
-    # Look for User ID pattern (UUID format or general alphanumeric)
-    id_match = re.search(r'User ID:\s*([a-zA-Z0-9-]+)', instructions, re.IGNORECASE)
+    # Look for User ID pattern - multiple formats
+    # "User ID: xxx" or "ID: xxx"
+    id_match = re.search(r'(?:User\s+)?ID:\s*([a-zA-Z0-9-]+)', instructions, re.IGNORECASE)
     if id_match:
         result["user_id"] = id_match.group(1)
 
-    # Look for User Name pattern
-    name_match = re.search(r'User Name:\s*([^\n]+)', instructions, re.IGNORECASE)
+    # Look for User Name pattern - multiple formats
+    # "User Name: xxx" or "Name: xxx"
+    name_match = re.search(r'(?:User\s+)?Name:\s*([^\n]+)', instructions, re.IGNORECASE)
     if name_match:
         result["name"] = name_match.group(1).strip()
 
     # Look for Email pattern
-    email_match = re.search(r'User Email:\s*([^\n]+)', instructions, re.IGNORECASE)
+    email_match = re.search(r'(?:User\s+)?Email:\s*([^\n]+)', instructions, re.IGNORECASE)
     if email_match:
         result["email"] = email_match.group(1).strip()
 
-    if result["user_id"]:
+    if result["user_id"] or result["name"]:
         global _cached_user_context
         _cached_user_context = result
-        print(f"[Cache] Cached user from instructions: {result['name']} ({result['user_id'][:8]}...)", file=sys.stderr)
+        name_display = result['name'] or 'Unknown'
+        id_display = result['user_id'][:8] + '...' if result['user_id'] else 'N/A'
+        print(f"[Cache] Cached user: {name_display} ({id_display})", file=sys.stderr)
 
     return result
 
@@ -402,11 +406,27 @@ async def stream_sse_response(content: str, msg_id: str):
     yield "data: [DONE]\n\n"
 
 
-async def run_agent_for_clm(user_message: str) -> str:
+async def run_agent_for_clm(user_message: str, system_prompt: str = None) -> str:
     """Run the Pydantic AI agent and return text response."""
     try:
+        # Extract user context from system prompt if provided
+        if system_prompt:
+            extract_user_from_instructions(system_prompt)
+
         print(f"[CLM] Starting agent run for: {user_message[:50]}", file=sys.stderr)
+        print(f"[CLM] Cached user context: {_cached_user_context}", file=sys.stderr)
+
+        # Build state with cached user if available
         state = AppState()
+        if _cached_user_context.get("name") or _cached_user_context.get("user_id"):
+            state.user = UserProfile(
+                id=_cached_user_context.get("user_id"),
+                name=_cached_user_context.get("name"),
+                firstName=_cached_user_context.get("name"),
+                email=_cached_user_context.get("email")
+            )
+            print(f"[CLM] State user set: {state.user.name}", file=sys.stderr)
+
         deps = StateDeps(state)
         result = await agent.run(user_message, deps=deps)
         print(f"[CLM] Agent result type: {type(result)}", file=sys.stderr)
@@ -430,8 +450,10 @@ async def clm_endpoint(
     authorization: Optional[str] = Header(None)
 ):
     """OpenAI-compatible endpoint for Hume CLM."""
-    # Auth temporarily disabled - Hume identifier was removed
-    # TODO: Re-enable after fixing Hume CLM config
+    # Debug: Log what Hume sends
+    print(f"[CLM DEBUG] Full auth header: {authorization}", file=sys.stderr)
+
+    # TEMPORARILY DISABLED for debugging - re-enable after testing
     # expected_secret = os.getenv("CLM_AUTH_SECRET")
     # if expected_secret:
     #     if not authorization or not authorization.startswith("Bearer "):
@@ -440,12 +462,24 @@ async def clm_endpoint(
     #     if token != expected_secret:
     #         raise HTTPException(status_code=401, detail="Invalid authorization")
 
-    # Get user message
-    user_message = request.messages[-1].content if request.messages else ""
+    # Extract system prompt (contains user context from Hume)
+    system_prompt = None
+    for msg in request.messages:
+        if msg.role == "system":
+            system_prompt = msg.content
+            print(f"[CLM] Found system prompt: {system_prompt[:100]}...", file=sys.stderr)
+            break
+
+    # Get user message (last non-system message)
+    user_message = ""
+    for msg in reversed(request.messages):
+        if msg.role == "user":
+            user_message = msg.content
+            break
     print(f"[CLM] Query: {user_message[:80]}", file=sys.stderr)
 
-    # Run agent
-    response_text = await run_agent_for_clm(user_message)
+    # Run agent with system prompt for user context
+    response_text = await run_agent_for_clm(user_message, system_prompt)
     print(f"[CLM] Response: {response_text[:80]}", file=sys.stderr)
 
     if request.stream:
