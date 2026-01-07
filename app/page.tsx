@@ -1,11 +1,24 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useCoAgent, useRenderToolCall } from "@copilotkit/react-core";
 import { UserButton, SignedIn, SignedOut } from "@neondatabase/auth/react/ui";
 import { authClient } from "@/app/lib/auth/client";
 import Link from "next/link";
 import { AnimatedJobCardsGrid, JobCardsLoading } from "./components/AnimatedJobCard";
+import dynamic from "next/dynamic";
+
+// Dynamic import for Three.js (client-side only)
+const GamerHero = dynamic(() => import("./components/GamerHero").then(mod => ({ default: mod.GamerHero })), {
+  ssr: false,
+  loading: () => <div className="h-screen bg-gradient-to-b from-gray-900 to-purple-900" />
+});
+
+// Dynamic import for Voice (client-side only)
+const VoiceInput = dynamic(() => import("./components/VoiceInput").then(mod => ({ default: mod.VoiceInput })), {
+  ssr: false,
+  loading: () => <div className="w-20 h-20 rounded-full bg-gray-700 animate-pulse" />
+});
 
 interface Job {
   id: string;
@@ -59,6 +72,13 @@ export default function Home() {
       }));
     }
   }, [user?.id, state?.user?.id, firstName, setState]);
+
+  // Voice message callback - forwards to CopilotKit
+  const handleVoiceMessage = useCallback((text: string, role?: "user" | "assistant") => {
+    console.log(`[Voice → CopilotKit] ${role}:`, text.slice(0, 50));
+    // Voice messages are handled by Hume's CLM which connects to the same backend
+    // This callback can be used to sync state or trigger UI updates if needed
+  }, []);
 
   // Render animated job cards when search_esports_jobs tool returns results
   useRenderToolCall({
@@ -160,31 +180,41 @@ Always use your tools to provide real data! Be enthusiastic about esports! 🎮`
           </div>
         </header>
 
-        {/* Hero Section */}
-        <section className="h-screen flex items-center justify-center pt-16">
-          <div className="text-center text-white">
-            <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-              EsportsJobs.quest
-            </h1>
-            <p className="text-xl text-gray-300 mb-8">
-              Find your career in competitive gaming
-            </p>
-            <p className="text-gray-400">
-              Chat with our AI assistant →
-            </p>
-            {state?.jobs && state.jobs.length > 0 && (
-              <div className="mt-8 p-4 bg-black/30 rounded-lg max-w-md mx-auto">
-                <p className="text-cyan-400 text-sm mb-2">
-                  Found {state.jobs.length} jobs for "{state.search_query}"
-                </p>
-                {state.jobs.slice(0, 3).map((job, i) => (
-                  <div key={i} className="text-left text-sm text-gray-300 py-2 border-t border-gray-700">
-                    <p className="font-semibold">{job.title}</p>
-                    <p className="text-gray-400">{job.company} • {job.location}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* Hero Section with 3D Character */}
+        <section className="h-screen relative overflow-hidden">
+          {/* 3D Background */}
+          <div className="absolute inset-0">
+            <GamerHero className="w-full h-full" />
+          </div>
+
+          {/* Content overlay */}
+          <div className="relative z-10 h-full flex items-center justify-center pt-16">
+            <div className="text-center text-white">
+              <h1 className="text-7xl font-black mb-4 bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 bg-clip-text text-transparent drop-shadow-2xl">
+                EsportsJobs.quest
+              </h1>
+              <p className="text-2xl text-gray-200 mb-8 font-light tracking-wide">
+                Find your career in competitive gaming
+              </p>
+              <p className="text-cyan-400 font-medium animate-pulse">
+                Chat with our AI assistant →
+              </p>
+            </div>
+          </div>
+
+          {/* Voice Widget + Scroll indicator */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-6">
+            {/* Voice Input */}
+            <VoiceInput
+              onMessage={handleVoiceMessage}
+              firstName={firstName}
+              userId={user?.id}
+            />
+
+            {/* Scroll indicator */}
+            <div className="w-6 h-10 border-2 border-cyan-400/50 rounded-full flex items-start justify-center p-2">
+              <div className="w-1.5 h-3 bg-cyan-400 rounded-full animate-bounce" />
+            </div>
           </div>
         </section>
       </main>

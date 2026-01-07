@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import Hls from 'hls.js'
+import { CompanyShowcaseCard } from './CompanyShowcaseCard'
 
 interface Job {
   id: string
@@ -18,23 +20,69 @@ interface AnimatedJobCardProps {
   index: number
 }
 
-// Rotating gradient backgrounds for variety
-const GRADIENTS = [
-  'from-purple-900 via-cyan-900 to-black',
-  'from-cyan-900 via-purple-900 to-black',
-  'from-indigo-900 via-purple-800 to-black',
-  'from-purple-800 via-pink-900 to-black',
+// Mux playback IDs for variety
+const MUX_IDS = [
+  "A6OZmZy02Y00K4ZPyHuyfTVXoauVjLhiHlbR2bLqtBywY",
+  "QeCiSMO9ZeptbSh02kbUCenrNIpwR02X0202Lcxz700HqYvI",
+  "XlLTzFXbHCKseOjTNG7fHlpOrXOKUD9d5p36lX1I00G4",
+  "Bg101Cs02gDzFyCjjz01ILN3lkmZqRtkKQBHpVcfOCb5uU",
 ]
 
+// Background types for A/B testing
+type BgType = 'hls' | 'gif' | 'webp' | 'jpeg'
+const BG_TYPES: BgType[] = ['hls', 'gif', 'webp', 'jpeg']
+
 /**
- * HIGH ENERGY animated job card
- * - Animated gradient backgrounds (instant render, no external deps)
- * - Entrance animations with stagger
- * - Neon glow effects on hover
+ * HIGH ENERGY animated job card - A/B testing backgrounds
+ * - Card 0, 4, 8...  = HLS video (best quality, streams)
+ * - Card 1, 5, 9...  = Animated GIF (motion, no JS needed)
+ * - Card 2, 6, 10... = WebP image (modern, small)
+ * - Card 3, 7, 11... = JPEG image (universal)
  */
 export function AnimatedJobCard({ job, index }: AnimatedJobCardProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const gradient = GRADIENTS[index % GRADIENTS.length]
+  const [videoReady, setVideoReady] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const hlsRef = useRef<Hls | null>(null)
+
+  const muxId = MUX_IDS[index % MUX_IDS.length]
+  const bgType = BG_TYPES[index % 4]
+
+  // Mux URLs
+  const hlsUrl = `https://stream.mux.com/${muxId}.m3u8`
+  const gifUrl = `https://image.mux.com/${muxId}/animated.gif?start=0&end=4&width=400&fps=15`
+  const webpUrl = `https://image.mux.com/${muxId}/thumbnail.webp?time=${(index % 5) + 1}&width=400`
+  const jpegUrl = `https://image.mux.com/${muxId}/thumbnail.jpg?time=${(index % 5) + 1}&width=400`
+
+  // Initialize HLS video
+  useEffect(() => {
+    if (bgType !== 'hls' || !videoRef.current) return
+
+    const video = videoRef.current
+
+    // Safari native HLS
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = hlsUrl
+      video.addEventListener('loadeddata', () => setVideoReady(true))
+      video.play().catch(() => {})
+    }
+    // Other browsers via hls.js
+    else if (Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false })
+      hlsRef.current = hls
+      hls.loadSource(hlsUrl)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setVideoReady(true)
+        video.play().catch(() => {})
+      })
+    }
+
+    return () => {
+      hlsRef.current?.destroy()
+      hlsRef.current = null
+    }
+  }, [bgType, hlsUrl])
 
   return (
     <motion.div
@@ -50,15 +98,61 @@ export function AnimatedJobCard({ job, index }: AnimatedJobCardProps) {
       onHoverEnd={() => setIsHovered(false)}
       className="relative overflow-hidden rounded-xl group cursor-pointer"
     >
-      {/* Animated gradient background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
-        {/* Animated shine effect */}
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-          initial={{ x: '-100%' }}
-          animate={{ x: isHovered ? '100%' : '-100%' }}
-          transition={{ duration: 0.6, ease: 'easeInOut' }}
-        />
+      {/* A/B Test: Different background types */}
+      <div className="absolute inset-0 bg-gray-900">
+        {bgType === 'hls' && (
+          <>
+            {/* Fallback thumbnail while video loads */}
+            <img
+              src={webpUrl}
+              alt=""
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${videoReady ? 'opacity-0' : 'opacity-100'}`}
+            />
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </>
+        )}
+
+        {bgType === 'gif' && (
+          <img
+            src={gifUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="eager"
+          />
+        )}
+
+        {bgType === 'webp' && (
+          <img
+            src={webpUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="eager"
+          />
+        )}
+
+        {bgType === 'jpeg' && (
+          <img
+            src={jpegUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="eager"
+          />
+        )}
+
+        {/* Gradient overlay for readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/30" />
+
+        {/* Type indicator badge */}
+        <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-mono text-gray-400 uppercase">
+          {bgType}
+        </div>
       </div>
 
       {/* Animated border glow */}
@@ -145,13 +239,56 @@ export function AnimatedJobCard({ job, index }: AnimatedJobCardProps) {
   )
 }
 
-// Job Cards Grid with entrance animation
+// Company data for "why work here" content
+const COMPANY_DATA: Record<string, { description: string; culture: string; achievements: string[] }> = {
+  "riot games": {
+    description: "Developer of League of Legends and Valorant. Operates major global esports leagues.",
+    culture: "Player-focused company culture with strong emphasis on competitive integrity and esports production quality.",
+    achievements: ["World's largest esports viewership", "Worlds Championship", "VCT Champions"]
+  },
+  "cloud9": {
+    description: "Major North American esports organization competing in League of Legends, Valorant, CS2.",
+    culture: "Content-focused organization known for developing talent and strong community engagement.",
+    achievements: ["Only NA team to reach Worlds semifinals", "CS Major Champions"]
+  },
+  "fnatic": {
+    description: "Premier esports organization based in London with successful teams across multiple titles.",
+    culture: "European esports pioneer with strong brand identity and performance-driven culture.",
+    achievements: ["League of Legends World Champions 2011", "Multiple Major wins"]
+  },
+  "team liquid": {
+    description: "One of the world's leading esports organizations with teams across multiple games.",
+    culture: "Known for player development and long-term partnerships with top sponsors.",
+    achievements: ["Multiple TI wins in Dota 2", "LCS Championships"]
+  },
+}
+
+function getCompanyData(companyName: string) {
+  const key = companyName.toLowerCase()
+  return COMPANY_DATA[key] || null
+}
+
+// Group jobs by company
+function groupJobsByCompany(jobs: Job[]): Map<string, Job[]> {
+  const groups = new Map<string, Job[]>()
+  for (const job of jobs) {
+    const existing = groups.get(job.company) || []
+    existing.push(job)
+    groups.set(job.company, existing)
+  }
+  return groups
+}
+
+// Job Cards Grid - now with Company Card → Job Card layout
 interface JobCardsGridProps {
   jobs: Job[]
   query?: string
 }
 
 export function AnimatedJobCardsGrid({ jobs, query }: JobCardsGridProps) {
+  const groupedJobs = groupJobsByCompany(jobs)
+  let companyIndex = 0
+
   return (
     <motion.div
       className="space-y-4"
@@ -172,14 +309,40 @@ export function AnimatedJobCardsGrid({ jobs, query }: JobCardsGridProps) {
           animate={{ opacity: 1, x: 0 }}
         >
           <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-          Found {jobs.length} job{jobs.length !== 1 ? 's' : ''} for &ldquo;{query}&rdquo;
+          Found {jobs.length} job{jobs.length !== 1 ? 's' : ''} at {groupedJobs.size} compan{groupedJobs.size !== 1 ? 'ies' : 'y'}
         </motion.div>
       )}
 
-      <div className="grid gap-4">
-        {jobs.map((job, i) => (
-          <AnimatedJobCard key={job.id || i} job={job} index={i} />
-        ))}
+      {/* Render Company Card → Job Cards for each company */}
+      <div className="space-y-6">
+        {Array.from(groupedJobs.entries()).map(([companyName, companyJobs], groupIdx) => {
+          const companyData = getCompanyData(companyName)
+
+          return (
+            <div key={companyName} className="space-y-3">
+              {/* Company Showcase Card */}
+              <CompanyShowcaseCard
+                company={{
+                  name: companyName,
+                  description: companyData?.description,
+                  culture: companyData?.culture,
+                  achievements: companyData?.achievements,
+                }}
+                index={groupIdx}
+                jobCount={companyJobs.length}
+              />
+
+              {/* Job Cards for this company */}
+              {companyJobs.map((job, jobIdx) => (
+                <AnimatedJobCard
+                  key={job.id || `${companyName}-${jobIdx}`}
+                  job={job}
+                  index={groupIdx * 10 + jobIdx}
+                />
+              ))}
+            </div>
+          )
+        })}
       </div>
     </motion.div>
   )
