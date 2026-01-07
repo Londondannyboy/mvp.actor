@@ -235,15 +235,22 @@ async def stream_sse_response(content: str, msg_id: str):
 async def run_agent_for_clm(user_message: str) -> str:
     """Run the Pydantic AI agent and return text response."""
     try:
+        print(f"[CLM] Starting agent run for: {user_message[:50]}")
         state = AppState()
         deps = StateDeps(state)
         result = await agent.run(user_message, deps=deps)
+        print(f"[CLM] Agent result type: {type(result)}")
 
+        # Pydantic AI returns result.output for the text response
+        if hasattr(result, 'output') and result.output:
+            return str(result.output)
         if hasattr(result, 'data') and result.data:
             return str(result.data)
         return str(result)
     except Exception as e:
+        import traceback
         print(f"[CLM] Agent error: {e}")
+        print(f"[CLM] Traceback: {traceback.format_exc()}")
         return "Sorry, I couldn't process that request. Try asking about esports jobs!"
 
 
