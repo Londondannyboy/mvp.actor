@@ -132,8 +132,9 @@ def search_esports_jobs(ctx: RunContext[StateDeps[AppState]], query: str = None,
     ctx.deps.state.search_query = query or category or "esports jobs"
 
     return {
-        "jobs": [{"title": j.title, "company": j.company, "location": j.location, "type": j.type, "salary": j.salary, "url": j.url} for j in jobs],
+        "jobs": [{"id": j.id, "title": j.title, "company": j.company, "location": j.location, "type": j.type, "salary": j.salary, "url": j.url} for j in jobs],
         "count": len(jobs),
+        "search_query": query or category or country or "esports jobs",
         "message": f"Found {len(jobs)} esports jobs!" if jobs else "No jobs found."
     }
 
