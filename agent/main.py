@@ -295,6 +295,8 @@ main_app.add_middleware(
 @main_app.middleware("http")
 async def extract_user_middleware(request: Request, call_next):
     """Extract user context from CopilotKit instructions before processing."""
+    global _cached_user_context
+
     # Only process POST requests that might contain messages
     if request.method == "POST":
         try:
@@ -302,9 +304,20 @@ async def extract_user_middleware(request: Request, call_next):
             body_bytes = await request.body()
             if body_bytes:
                 body = json.loads(body_bytes)
-                messages = body.get("messages", [])
 
-                # Look for system messages with user context
+                # AG-UI protocol: User context is in state.user
+                state = body.get("state", {})
+                state_user = state.get("user", {})
+                if state_user and state_user.get("id"):
+                    _cached_user_context = {
+                        "user_id": state_user.get("id"),
+                        "name": state_user.get("firstName") or state_user.get("name"),
+                        "email": state_user.get("email")
+                    }
+                    print(f"[Middleware] AG-UI cached user: {_cached_user_context.get('name')}", file=sys.stderr)
+
+                # CLM protocol: User context might be in system messages
+                messages = body.get("messages", [])
                 for msg in messages:
                     role = msg.get("role", "")
                     content = msg.get("content", "")
@@ -312,13 +325,9 @@ async def extract_user_middleware(request: Request, call_next):
                     if role == "system" and "User ID:" in content:
                         extracted = extract_user_from_instructions(content)
                         if extracted.get("user_id"):
-                            print(f"[Middleware] Cached user: {extracted.get('name')}", file=sys.stderr)
-
-                    # Also check other messages for user context (CopilotKit may embed it)
-                    elif "User Name:" in content and "User ID:" in content:
-                        extracted = extract_user_from_instructions(content)
-                        if extracted.get("user_id"):
-                            print(f"[Middleware] Cached user from message: {extracted.get('name')}", file=sys.stderr)
+                            _cached_user_context = extracted
+                            print(f"[Middleware] CLM cached user: {extracted.get('name')}", file=sys.stderr)
+                            break
 
                 # Reconstruct request with body
                 async def receive():
