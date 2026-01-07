@@ -15,8 +15,9 @@ export function HlsVideoInit() {
 
       videos.forEach((video) => {
         // Check if video has an HLS source
+        // Use getAttribute for more reliable source detection
         const source = video.querySelector('source');
-        const src = source?.src || video.src;
+        const src = source?.getAttribute('src') || source?.src || video.getAttribute('src') || video.src;
 
         if (!src || !src.includes('.m3u8')) return;
 
@@ -79,12 +80,17 @@ export function HlsVideoInit() {
       }
     };
 
-    // Initialize on mount
+    // Initialize on mount with a small delay for dynamic content
     initHls();
+
+    // Re-initialize after a short delay to catch dynamically rendered components
+    const timeoutId = setTimeout(initHls, 500);
+    const timeoutId2 = setTimeout(initHls, 1500);
 
     // Re-initialize when DOM changes (for dynamic content)
     const observer = new MutationObserver(() => {
-      initHls();
+      // Debounce the mutation observer
+      setTimeout(initHls, 100);
     });
 
     observer.observe(document.body, {
@@ -94,6 +100,8 @@ export function HlsVideoInit() {
 
     // Cleanup
     return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(timeoutId2);
       observer.disconnect();
       document.querySelectorAll('video').forEach((video) => {
         const hls = (video as any)._hls;
