@@ -81,24 +81,22 @@ export default function Home() {
   // Get appendMessage from CopilotKit chat hook
   const { appendMessage } = useCopilotChat();
 
-  // Voice message callback - forwards USER messages to CopilotKit
-  // This triggers the agent and shows the conversation in the sidebar
+  // Voice message callback - forwards messages to CopilotKit
+  // This triggers the agent (for user) and shows transcripts in sidebar
   const handleVoiceMessage = useCallback((text: string, role?: "user" | "assistant") => {
     console.log(`[Voice → CopilotKit] ${role}:`, text.slice(0, 50));
 
-    // Forward USER messages to CopilotKit to trigger the agent
-    // This makes voice transcripts appear in the sidebar
-    if (role === "user") {
-      try {
-        const message = new TextMessage({ content: text, role: Role.User });
-        console.log("[Voice] Appending message to CopilotKit:", message);
-        appendMessage(message);
-        console.log("[Voice] Message appended successfully");
-      } catch (e) {
-        console.error("[Voice] Error appending message:", e);
-      }
+    // Forward BOTH user and assistant messages to CopilotKit
+    // User messages trigger the agent, assistant messages show in transcript
+    try {
+      const messageRole = role === "user" ? Role.User : Role.Assistant;
+      const message = new TextMessage({ content: text, role: messageRole });
+      console.log("[Voice] Appending message to CopilotKit:", { role: messageRole, content: text.slice(0, 30) });
+      appendMessage(message);
+      console.log("[Voice] Message appended successfully");
+    } catch (e) {
+      console.error("[Voice] Error appending message:", e);
     }
-    // Note: Assistant messages are handled by Hume voice - don't duplicate in chat
   }, [appendMessage]);
 
   // Render animated job cards when search_esports_jobs tool returns results
