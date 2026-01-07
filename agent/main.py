@@ -28,6 +28,12 @@ from pydantic_ai.models.google import GoogleModel
 
 from tools.job_search import search_jobs, get_available_categories, get_available_countries
 from tools.company_lookup import lookup_company
+from tools.user_context import (
+    get_user_profile, save_user_profile,
+    get_user_job_interests, save_job_interest,
+    get_conversation_memory, search_user_memories,
+    get_full_user_context
+)
 
 
 # =====
@@ -136,29 +142,34 @@ agent = Agent(
         You are an enthusiastic AI assistant for EsportsJobs.quest, helping users find careers in esports and gaming.
 
         ## CRITICAL: ALWAYS USE YOUR TOOLS!
-        You MUST use tools to answer ALL questions. NEVER make up information or say you don't have access.
+        You MUST use tools to answer ALL questions. NEVER make up information.
 
         **MANDATORY TOOL USAGE:**
         | User asks... | TOOL TO CALL |
         |--------------|--------------|
-        | "What is my name?" | get_my_profile |
-        | "What is my email?" | get_my_profile |
-        | "Who am I?" | get_my_profile |
-        | "Tell me about Team Liquid" | lookup_esports_company |
-        | "Find jobs", "show jobs" | search_esports_jobs |
-        | "What categories?" | get_categories |
-        | "Which countries?" | get_countries |
+        | "What is my name/email?" | get_my_profile |
+        | "What are my skills?" | get_my_full_context |
+        | "What jobs have I saved?" | get_my_saved_jobs |
+        | "Remember when I said..." | recall_past_conversations |
+        | "Tell me about [company]" | lookup_esports_company |
+        | "Find/show jobs" | search_esports_jobs |
+        | "Save this job" | save_job_to_favorites |
+        | "My skills are..." | update_my_skills |
 
-        ## Examples:
-        User: "What is my name?"
-        You: [CALL get_my_profile] then respond with the name from the result
+        ## PERSONALIZED ADVICE
+        When recommending jobs, FIRST call get_my_full_context to understand:
+        - User's skills and experience
+        - Jobs they've saved before
+        - Past conversation topics
 
-        User: "Find me UK jobs"
-        You: [CALL search_esports_jobs with country="UK"]
+        Example: If user asks for "marketing jobs" but their skills are in coaching,
+        gently point this out: "I see your background is in coaching - are you looking
+        to transition into marketing, or would you like coaching roles instead?"
 
         ## Your Personality
         - Enthusiastic about esports! Use emojis sparingly: 🎮 🏆
         - Be specific with real data from tools
+        - Give personalized advice based on user context
         - Keep responses concise but helpful
     """).strip(),
 )
@@ -273,6 +284,92 @@ def get_my_profile(ctx: RunContext[StateDeps[AppState]]) -> dict:
         "found": False,
         "message": "User not logged in. Please sign in to see your profile."
     }
+
+
+@agent.tool
+def get_my_full_context(ctx: RunContext[StateDeps[AppState]]) -> dict:
+    """Get complete user context including profile, job interests, and conversation history.
+
+    Call this when you need to understand the user's background, skills, or past interactions.
+    """
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    if not user_id:
+        return {"found": False, "message": "User not logged in"}
+
+    print(f"[Tool] Getting full context for: {user_id}", file=sys.stderr)
+    context = get_full_user_context(user_id)
+    return {"found": True, "context": context}
+
+
+@agent.tool
+def update_my_skills(ctx: RunContext[StateDeps[AppState]], skills: list[str]) -> dict:
+    """Update the user's skills profile.
+
+    Args:
+        skills: List of skills like ["marketing", "social media", "esports management"]
+    """
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    if not user_id:
+        return {"success": False, "message": "User not logged in"}
+
+    print(f"[Tool] Updating skills for {user_id}: {skills}", file=sys.stderr)
+    email = get_effective_user_email(ctx.deps.state.user)
+    name = get_effective_user_name(ctx.deps.state.user)
+
+    result = save_user_profile(user_id, email=email, name=name, skills=skills)
+    return result
+
+
+@agent.tool
+def save_job_to_favorites(ctx: RunContext[StateDeps[AppState]], job_id: str) -> dict:
+    """Save a job to user's favorites/interests.
+
+    Args:
+        job_id: The ID of the job to save
+    """
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    if not user_id:
+        return {"success": False, "message": "User not logged in"}
+
+    print(f"[Tool] Saving job {job_id} for user {user_id}", file=sys.stderr)
+    result = save_job_interest(user_id, job_id, interest_type="favorited")
+    return result
+
+
+@agent.tool
+def get_my_saved_jobs(ctx: RunContext[StateDeps[AppState]]) -> dict:
+    """Get jobs the user has saved or shown interest in.
+
+    Returns list of jobs user has interacted with.
+    """
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    if not user_id:
+        return {"found": False, "message": "User not logged in"}
+
+    print(f"[Tool] Getting saved jobs for: {user_id}", file=sys.stderr)
+    result = get_user_job_interests(user_id, limit=10)
+    return result
+
+
+@agent.tool
+def recall_past_conversations(ctx: RunContext[StateDeps[AppState]], topic: str = None) -> dict:
+    """Search past conversations for relevant context.
+
+    Args:
+        topic: Optional topic to search for in conversation history
+    """
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    if not user_id:
+        return {"found": False, "message": "User not logged in"}
+
+    print(f"[Tool] Recalling conversations for {user_id}, topic: {topic}", file=sys.stderr)
+
+    if topic:
+        result = search_user_memories(user_id, topic, limit=3)
+    else:
+        result = get_conversation_memory(user_id, limit=5)
+
+    return result
 
 
 # =====
