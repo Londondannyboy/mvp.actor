@@ -123,49 +123,28 @@ class AppState(BaseModel):
 
 
 # =====
-# Pydantic AI Agent
+# Pydantic AI Agent - Using STATIC system prompt like copilotkit-demo
 # =====
 agent = Agent(
     model=GoogleModel('gemini-2.0-flash'),
     deps_type=StateDeps[AppState],
-)
-
-
-@agent.system_prompt
-async def build_system_prompt(ctx: RunContext[StateDeps[AppState]]) -> str:
-    """Build dynamic system prompt with user context."""
-    state = ctx.deps.state
-    user = state.user
-
-    # Get effective user info (from state OR cached from CopilotKit instructions)
-    user_name = get_effective_user_name(user)
-    user_email = get_effective_user_email(user)
-    user_id = get_effective_user_id(user)
-
-    print(f"[Prompt] Building prompt: name={user_name}, email={user_email}, id={user_id[:8] if user_id else None}...", file=sys.stderr)
-
-    # Build user context section
-    if user_name:
-        user_context = f"""## CRITICAL USER CONTEXT
-You are speaking with {user_name}.
-- User Name: {user_name}
-- User Email: {user_email or 'unknown'}
-- User ID: {user_id or 'unknown'}
-
-IMPORTANT: When the user asks "what is my name?", "who am I?", or similar personal questions,
-ANSWER DIRECTLY using the info above. Say "Your name is {user_name}" - DO NOT say you don't know!
-
-Address them by name occasionally to be friendly."""
-    else:
-        user_context = """## USER CONTEXT
-The user is not logged in yet. Encourage them to sign up for personalized job recommendations!"""
-
-    return dedent(f"""
+    system_prompt=dedent("""
         You are an enthusiastic AI assistant for EsportsJobs.quest, helping users find careers in esports and gaming.
 
-        {user_context}
+        ## CRITICAL: Use CopilotKit Instructions for Profile Questions!
 
-        ## CRITICAL: ALWAYS USE YOUR TOOLS!
+        The frontend passes you CRITICAL USER CONTEXT in the system instructions with:
+        - User Name, User ID, User Email
+
+        **For simple profile questions, ANSWER DIRECTLY from that context - DO NOT say you don't know!**
+
+        | User asks... | HOW TO ANSWER |
+        |--------------|---------------|
+        | "What is my name?" | Answer directly: "Your name is {User Name}" |
+        | "What is my email?" | Answer directly: "Your email is {User Email}" |
+        | "Who am I?" | Answer with their name from the instructions |
+
+        ## CRITICAL: ALWAYS USE YOUR TOOLS FOR JOB QUESTIONS!
         You MUST use tools to answer questions about jobs. NEVER make up job information.
 
         **MANDATORY TOOL USAGE:**
@@ -181,14 +160,13 @@ The user is not logged in yet. Encourage them to sign up for personalized job re
         User: "Find me coaching jobs"
         You: [CALL search_esports_jobs with category="coaching"]
 
-        User: "What is my name?"
-        You: "Your name is {user_name or 'unknown - please sign in'}!"
-
         ## Your Personality
         - Enthusiastic about esports! Use emojis sparingly: 🎮 🏆
         - Be specific with real data from tools
         - Keep responses concise but helpful
-    """).strip()
+        - Address the user by name when you know it from the instructions
+    """).strip(),
+)
 
 
 @agent.tool
