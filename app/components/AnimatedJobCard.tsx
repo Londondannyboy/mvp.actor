@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import Hls from 'hls.js'
-import { getVideoForIndex, getMuxThumbnailUrl } from '@/lib/mux-config'
 
 interface Job {
   id: string
@@ -20,61 +18,23 @@ interface AnimatedJobCardProps {
   index: number
 }
 
+// Rotating gradient backgrounds for variety
+const GRADIENTS = [
+  'from-purple-900 via-cyan-900 to-black',
+  'from-cyan-900 via-purple-900 to-black',
+  'from-indigo-900 via-purple-800 to-black',
+  'from-purple-800 via-pink-900 to-black',
+]
+
 /**
- * HIGH ENERGY animated job card with video background
- * - Mux HLS video plays on hover
+ * HIGH ENERGY animated job card
+ * - Animated gradient backgrounds (instant render, no external deps)
  * - Entrance animations with stagger
- * - Neon glow effects
- * - That esports broadcast production vibe
+ * - Neon glow effects on hover
  */
 export function AnimatedJobCard({ job, index }: AnimatedJobCardProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const [isVideoReady, setIsVideoReady] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const hlsRef = useRef<Hls | null>(null)
-
-  // Each card gets a different video from the rotation
-  const playbackId = getVideoForIndex(index)
-  const thumbnailUrl = getMuxThumbnailUrl(playbackId, index % 5 + 1)
-  const streamUrl = `https://stream.mux.com/${playbackId}.m3u8`
-
-  // Initialize HLS when hovered
-  useEffect(() => {
-    if (!isHovered || !videoRef.current) return
-
-    const video = videoRef.current
-
-    // Native HLS support (Safari)
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl
-      video.addEventListener('loadeddata', () => setIsVideoReady(true))
-      video.play().catch(() => {})
-    }
-    // Use hls.js for other browsers
-    else if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-      })
-      hlsRef.current = hls
-
-      hls.loadSource(streamUrl)
-      hls.attachMedia(video)
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setIsVideoReady(true)
-        video.play().catch(() => {})
-      })
-    }
-
-    return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy()
-        hlsRef.current = null
-      }
-      setIsVideoReady(false)
-    }
-  }, [isHovered, streamUrl])
+  const gradient = GRADIENTS[index % GRADIENTS.length]
 
   return (
     <motion.div
@@ -82,7 +42,7 @@ export function AnimatedJobCard({ job, index }: AnimatedJobCardProps) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
         duration: 0.4,
-        delay: index * 0.1,
+        delay: index * 0.08,
         ease: [0.25, 0.46, 0.45, 0.94]
       }}
       whileHover={{ scale: 1.02 }}
@@ -90,34 +50,15 @@ export function AnimatedJobCard({ job, index }: AnimatedJobCardProps) {
       onHoverEnd={() => setIsHovered(false)}
       className="relative overflow-hidden rounded-xl group cursor-pointer"
     >
-      {/* Video/Image Background */}
-      <div className="absolute inset-0">
-        {/* Thumbnail base layer */}
-        <img
-          src={thumbnailUrl}
-          alt=""
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-            isVideoReady ? 'opacity-0' : 'opacity-100'
-          }`}
+      {/* Animated gradient background */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
+        {/* Animated shine effect */}
+        <motion.div
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+          initial={{ x: '-100%' }}
+          animate={{ x: isHovered ? '100%' : '-100%' }}
+          transition={{ duration: 0.6, ease: 'easeInOut' }}
         />
-
-        {/* Video layer (loads on hover) */}
-        {isHovered && (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-              isVideoReady ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        )}
-
-        {/* Gradient overlays for readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-900/30 to-cyan-900/30" />
       </div>
 
       {/* Animated border glow */}

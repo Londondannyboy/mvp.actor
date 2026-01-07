@@ -64,20 +64,28 @@ export default function Home() {
   useRenderToolCall({
     name: "search_esports_jobs",
     render: ({ result, status }) => {
-      if (status !== "complete" || !result) {
+      // Show loading for any non-complete state
+      if (status === "executing" || status === "inProgress") {
         return <JobCardsLoading />;
       }
-      const jobs = result.jobs || [];
-      if (jobs.length === 0) {
-        return (
-          <div className="text-center py-8">
-            <div className="text-4xl mb-3">🎮</div>
-            <p className="text-gray-400">No jobs found matching your criteria.</p>
-            <p className="text-cyan-400 text-sm mt-2">Try a different search!</p>
-          </div>
-        );
+
+      // Handle complete state
+      if (status === "complete" && result) {
+        const jobs = result.jobs || [];
+        if (jobs.length === 0) {
+          return (
+            <div className="text-center py-8">
+              <div className="text-4xl mb-3">🎮</div>
+              <p className="text-gray-400">No jobs found matching your criteria.</p>
+              <p className="text-cyan-400 text-sm mt-2">Try a different search!</p>
+            </div>
+          );
+        }
+        return <AnimatedJobCardsGrid jobs={jobs} query={result.search_query} />;
       }
-      return <AnimatedJobCardsGrid jobs={jobs} query={result.search_query} />;
+
+      // Fallback for any other state
+      return <JobCardsLoading />;
     },
   });
 
