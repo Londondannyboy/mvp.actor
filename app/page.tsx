@@ -240,7 +240,7 @@ export default function Home() {
             <Suspense fallback={<div className="w-full h-full bg-gradient-to-br from-purple-900/20 to-cyan-900/20" />}>
               <GamerHero className="w-full h-full" />
             </Suspense>
-            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/60" />
           </div>
 
           <UnifiedHeader
@@ -266,10 +266,8 @@ export default function Home() {
               <JobSearch size="large" className="mb-4" />
               <PopularSearches />
             </div>
-          </div>
-
-          <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-20">
-            <div className="flex flex-col items-center gap-2">
+            {/* Voice AI button - below search */}
+            <div className="mt-8 flex flex-col items-center gap-2">
               <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user?.id} email={user?.email} pageContext={PAGE_CONTEXT} />
               <span className="text-xs text-gray-400 bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">Talk to our AI</span>
             </div>

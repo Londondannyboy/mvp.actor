@@ -256,6 +256,8 @@ export function GamerHero({ className = '' }: GamerHeroProps) {
 
   return (
     <div className={`relative ${className}`}>
+      {/* Purple gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-[#0a0a0f] to-cyan-900/30" />
       <Canvas
         shadows
         camera={{ position: [0, 1, 5], fov: 50 }}
