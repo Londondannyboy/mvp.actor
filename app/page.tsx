@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useCoAgent } from "@copilotkit/react-core";
 import { UserButton, SignedIn, SignedOut } from "@neondatabase/auth/react/ui";
@@ -15,9 +16,17 @@ interface Job {
   url: string;
 }
 
+interface UserProfile {
+  id?: string;
+  name?: string;
+  firstName?: string;
+  email?: string;
+}
+
 interface AgentState {
   jobs: Job[];
   search_query: string;
+  user?: UserProfile;
 }
 
 export default function Home() {
@@ -25,13 +34,30 @@ export default function Home() {
   const user = session?.user;
   const firstName = user?.name?.split(' ')[0] || null;
 
-  const { state } = useCoAgent<AgentState>({
+  const { state, setState } = useCoAgent<AgentState>({
     name: "esports_agent",
     initialState: {
       jobs: [],
       search_query: "",
+      user: undefined,
     },
   });
+
+  // Sync user from auth to agent state
+  useEffect(() => {
+    if (user && !state?.user?.id) {
+      setState((prev) => ({
+        jobs: prev?.jobs ?? [],
+        search_query: prev?.search_query ?? "",
+        user: {
+          id: user.id,
+          name: user.name || undefined,
+          firstName: firstName || undefined,
+          email: user.email || undefined,
+        },
+      }));
+    }
+  }, [user?.id, state?.user?.id, firstName, setState]);
 
   return (
     <CopilotSidebar

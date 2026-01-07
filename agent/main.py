@@ -41,9 +41,18 @@ class Job(BaseModel):
     url: str = ""
 
 
+class UserProfile(BaseModel):
+    """User profile synced from frontend auth."""
+    id: Optional[str] = None
+    name: Optional[str] = None
+    firstName: Optional[str] = None
+    email: Optional[str] = None
+
+
 class AppState(BaseModel):
     jobs: list[Job] = Field(default_factory=list)
     search_query: str = ""
+    user: Optional[UserProfile] = None
 
 
 # =====
@@ -52,8 +61,27 @@ class AppState(BaseModel):
 agent = Agent(
     model=GoogleModel('gemini-2.0-flash'),
     deps_type=StateDeps[AppState],
-    system_prompt=dedent("""
+)
+
+
+@agent.system_prompt
+async def build_system_prompt(ctx: RunContext[StateDeps[AppState]]) -> str:
+    """Build dynamic system prompt with user context."""
+    state = ctx.deps.state
+    user = state.user
+
+    # Personalized greeting if user is logged in
+    if user and (user.firstName or user.name):
+        name = user.firstName or user.name
+        user_context = f"You are speaking with {name}. Address them by name occasionally to be friendly."
+    else:
+        user_context = "The user is not logged in yet. Encourage them to sign up for personalized job recommendations!"
+
+    return dedent(f"""
         You are an enthusiastic AI assistant for EsportsJobs.quest, helping users find careers in esports and gaming.
+
+        ## USER CONTEXT
+        {user_context}
 
         ## CRITICAL: ALWAYS USE YOUR TOOLS!
         You MUST use tools to answer questions. NEVER make up information.
@@ -76,7 +104,6 @@ agent = Agent(
         - Be specific with real data from tools
         - Keep responses concise but helpful
     """).strip()
-)
 
 
 @agent.tool
