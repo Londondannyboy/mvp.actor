@@ -58,7 +58,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('list');
 
-  // Fetch profile data
+  // Fetch profile data from API
   useEffect(() => {
     async function fetchProfile() {
       if (!user?.id) {
@@ -67,27 +67,54 @@ export default function ProfilePage() {
       }
 
       try {
-        // Call the agent API to get profile data
-        const response = await fetch('/api/copilotkit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: 'Get my profile data silently' }],
-            tool_choice: { type: 'function', function: { name: 'get_user_skills_and_preferences' } }
-          })
-        });
+        const response = await fetch(`/api/user-profile?userId=${user.id}`);
+        const data = await response.json();
 
-        // For now, use mock data since we don't have direct API access
-        // In production, you'd call the backend directly
-        setProfileData(null);
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        // Group items by type
+        const items: Record<string, ProfileItem[]> = {};
+        for (const item of data.items || []) {
+          const type = item.item_type;
+          if (!items[type]) items[type] = [];
+          items[type].push({
+            value: item.value,
+            metadata: item.metadata || {},
+            confirmed: item.confirmed,
+            created_at: item.created_at,
+          });
+        }
+
+        setProfileData({ items, total: data.items?.length || 0 });
+
+        // Calculate completeness
+        const skills = items.skill || [];
+        const hasLocation = (items.location || []).length > 0;
+        const hasRole = (items.role || []).length > 0;
+        const hasExperience = (items.experience_years || []).length > 0;
+
+        const missing: string[] = [];
+        if (skills.length === 0) missing.push('skills');
+        if (!hasLocation) missing.push('location');
+        if (!hasRole) missing.push('role');
+
+        // Calculate percent: skills (40%), role (30%), location (30%)
+        let percent = 0;
+        if (skills.length >= 3) percent += 40;
+        else if (skills.length > 0) percent += Math.min(skills.length * 15, 40);
+        if (hasRole) percent += 30;
+        if (hasLocation) percent += 30;
+
         setCompleteness({
-          complete: false,
-          percent: 0,
-          skills_count: 0,
-          has_location: false,
-          has_role: false,
-          has_experience: false,
-          missing: ['skills', 'location', 'role', 'experience']
+          complete: percent >= 80,
+          percent,
+          skills_count: skills.length,
+          has_location: hasLocation,
+          has_role: hasRole,
+          has_experience: hasExperience,
+          missing,
         });
       } catch (e) {
         setError('Failed to load profile');
@@ -298,7 +325,37 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* CTA to Build Profile */}
+        {/* Job Assessment Feature Card - Show when profile has some data */}
+        {profileData && completeness && completeness.skills_count > 0 && (
+          <div className="mb-8 p-6 bg-gradient-to-br from-purple-900/30 to-cyan-900/30 rounded-2xl border border-purple-500/30">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-2">Assess Your Job Fit</h3>
+                <p className="text-gray-400 mb-3">
+                  With {completeness.skills_count} skill{completeness.skills_count !== 1 ? 's' : ''} in your profile, you can now see how well you match job requirements.
+                </p>
+                <p className="text-sm text-gray-500">
+                  Browse jobs and click the purple &ldquo;Assess My Fit&rdquo; button to compare your skills against requirements.
+                </p>
+              </div>
+              <Link
+                href="/esports-jobs"
+                className="flex-shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-lg transition-all"
+              >
+                Browse Jobs
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* CTA to Build Profile - Empty state */}
         {(!profileData || completeness?.percent === 0) && (
           <div className="text-center p-8 bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-gray-700">
             <div className="text-5xl mb-4">🎮</div>
@@ -311,10 +368,25 @@ export default function ProfilePage() {
               Try saying: &ldquo;I know Python and JavaScript&rdquo; or &ldquo;I&apos;m looking for marketing roles in London&rdquo;
             </p>
             <Link
-              href="/#chat"
+              href="/"
               className="inline-block bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-bold py-3 px-8 rounded-lg transition-all"
             >
               Open AI Chat
+            </Link>
+          </div>
+        )}
+
+        {/* Partial Profile - Encourage completion */}
+        {profileData && completeness && completeness.percent > 0 && completeness.percent < 80 && (
+          <div className="text-center p-6 bg-gray-900/50 rounded-xl border border-gray-700">
+            <p className="text-gray-400 mb-4">
+              Your profile is {completeness.percent}% complete. Add more {completeness.missing[0]} to improve job matches.
+            </p>
+            <Link
+              href="/"
+              className="inline-block text-cyan-400 hover:text-cyan-300 font-medium"
+            >
+              Continue building with AI Chat →
             </Link>
           </div>
         )}
