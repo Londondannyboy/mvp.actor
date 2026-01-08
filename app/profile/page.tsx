@@ -6,22 +6,42 @@ import { UnifiedHeader, JOBS_SITE_NAV_ITEMS } from '@/app/components/UnifiedHead
 import { UnifiedFooter } from '@/app/components/UnifiedFooter';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import {
+  type ProfileItems,
+  getOverallCompletion,
+  getAllCharacterCompletions,
+  getNextIncompleteCharacter,
+  getAllCompleteMessage,
+} from '@/lib/character-config';
 
-// Dynamic imports for profile components
+// Dynamic imports for heavy components
 const UserProfileGraph = dynamic(
   () => import('../components/UserProfileGraph').then(mod => mod.UserProfileGraph),
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[500px] bg-gray-900/50 rounded-xl flex items-center justify-center">
-        <div className="text-cyan-400 animate-pulse">Loading 3D Graph...</div>
+      <div className="w-full h-[400px] bg-gray-900/50 rounded-xl flex items-center justify-center">
+        <div className="text-cyan-400 animate-pulse">Loading Profile Graph...</div>
       </div>
     )
   }
 );
 
-const ProfileItemsList = dynamic(
-  () => import('../components/UserProfileGraph').then(mod => mod.ProfileItemsList),
+// Dynamic imports for character components
+const RepoCharacter = dynamic(
+  () => import('../components/characters').then(mod => mod.RepoCharacter),
+  { ssr: false }
+);
+const TrinityCharacter = dynamic(
+  () => import('../components/characters').then(mod => mod.TrinityCharacter),
+  { ssr: false }
+);
+const VeloCharacter = dynamic(
+  () => import('../components/characters').then(mod => mod.VeloCharacter),
+  { ssr: false }
+);
+const ReachCharacter = dynamic(
+  () => import('../components/characters').then(mod => mod.ReachCharacter),
   { ssr: false }
 );
 
@@ -32,31 +52,14 @@ interface ProfileItem {
   created_at: string;
 }
 
-interface ProfileData {
-  items: Record<string, ProfileItem[]>;
-  total: number;
-}
-
-interface CompletenessData {
-  complete: boolean;
-  percent: number;
-  skills_count: number;
-  has_location: boolean;
-  has_role: boolean;
-  has_experience: boolean;
-  missing: string[];
-}
-
 export default function ProfilePage() {
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
   const firstName = user?.name?.split(' ')[0];
 
-  const [profileData, setProfileData] = useState<ProfileData | null>(null);
-  const [completeness, setCompleteness] = useState<CompletenessData | null>(null);
+  const [profileItems, setProfileItems] = useState<ProfileItems>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'graph' | 'list'>('list');
 
   // Fetch profile data from API
   useEffect(() => {
@@ -74,12 +77,12 @@ export default function ProfilePage() {
           throw new Error(data.error);
         }
 
-        // Group items by type
-        const items: Record<string, ProfileItem[]> = {};
+        // Group items by type for character config compatibility
+        const items: ProfileItems = {};
         for (const item of data.items || []) {
-          const type = item.item_type;
+          const type = item.item_type as keyof ProfileItems;
           if (!items[type]) items[type] = [];
-          items[type].push({
+          (items[type] as ProfileItem[]).push({
             value: item.value,
             metadata: item.metadata || {},
             confirmed: item.confirmed,
@@ -87,35 +90,7 @@ export default function ProfilePage() {
           });
         }
 
-        setProfileData({ items, total: data.items?.length || 0 });
-
-        // Calculate completeness
-        const skills = items.skill || [];
-        const hasLocation = (items.location || []).length > 0;
-        const hasRole = (items.role || []).length > 0;
-        const hasExperience = (items.experience_years || []).length > 0;
-
-        const missing: string[] = [];
-        if (skills.length === 0) missing.push('skills');
-        if (!hasLocation) missing.push('location');
-        if (!hasRole) missing.push('role');
-
-        // Calculate percent: skills (40%), role (30%), location (30%)
-        let percent = 0;
-        if (skills.length >= 3) percent += 40;
-        else if (skills.length > 0) percent += Math.min(skills.length * 15, 40);
-        if (hasRole) percent += 30;
-        if (hasLocation) percent += 30;
-
-        setCompleteness({
-          complete: percent >= 80,
-          percent,
-          skills_count: skills.length,
-          has_location: hasLocation,
-          has_role: hasRole,
-          has_experience: hasExperience,
-          missing,
-        });
+        setProfileItems(items);
       } catch (e) {
         setError('Failed to load profile');
         console.error(e);
@@ -129,24 +104,30 @@ export default function ProfilePage() {
     }
   }, [user?.id, isPending]);
 
-  // Convert profile data to graph format
-  const graphData = profileData ? {
+  // Calculate overall completion and character statuses
+  const overallPercent = getOverallCompletion(profileItems);
+  const characterCompletions = getAllCharacterCompletions(profileItems);
+  const nextIncomplete = getNextIncompleteCharacter(profileItems);
+  const allComplete = characterCompletions.every(c => c.isComplete);
+
+  // Convert profile data to graph format for ZEP visualization
+  const graphData = {
     nodes: [
       { id: 'user', name: firstName || 'You', type: 'user' as const, color: '#FFD700' },
-      ...(profileData.items?.skill || []).map((s, i) => ({
+      ...(profileItems.skill || []).map((s, i) => ({
         id: `skill_${i}`,
         name: s.value,
         type: 'skill' as const,
         color: '#A855F7',
         metadata: s.metadata
       })),
-      ...(profileData.items?.role || []).map((r, i) => ({
+      ...(profileItems.role || []).map((r, i) => ({
         id: `role_${i}`,
         name: r.value,
         type: 'role' as const,
         color: '#3B82F6'
       })),
-      ...(profileData.items?.location || []).map((l, i) => ({
+      ...(profileItems.location || []).map((l, i) => ({
         id: `location_${i}`,
         name: l.value,
         type: 'location' as const,
@@ -155,11 +136,11 @@ export default function ProfilePage() {
       })),
     ],
     links: [
-      ...(profileData.items?.skill || []).map((_, i) => ({ source: 'user', target: `skill_${i}` })),
-      ...(profileData.items?.role || []).map((_, i) => ({ source: 'user', target: `role_${i}` })),
-      ...(profileData.items?.location || []).map((_, i) => ({ source: 'user', target: `location_${i}` })),
+      ...(profileItems.skill || []).map((_, i) => ({ source: 'user', target: `skill_${i}` })),
+      ...(profileItems.role || []).map((_, i) => ({ source: 'user', target: `role_${i}` })),
+      ...(profileItems.location || []).map((_, i) => ({ source: 'user', target: `location_${i}` })),
     ]
-  } : undefined;
+  };
 
   // Loading state
   if (isPending || loading) {
@@ -186,7 +167,7 @@ export default function ProfilePage() {
           <div className="text-6xl mb-6">🔒</div>
           <h1 className="text-3xl font-bold mb-4">Sign In to View Your Profile</h1>
           <p className="text-gray-400 mb-8">
-            Build your career profile to get personalized job recommendations and track your progress.
+            Build your career profile with 4 unique characters and get personalized job recommendations.
           </p>
           <Link
             href="/auth/sign-in"
@@ -203,169 +184,165 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-[#0a0a0f] text-white">
       <UnifiedHeader activeSite="jobs" siteNavItems={JOBS_SITE_NAV_ITEMS} />
 
-      <div className="pt-24 pb-16 px-4 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-black mb-4">
-            {firstName ? `${firstName}'s` : 'Your'} <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Career Profile</span>
-          </h1>
-          <p className="text-xl text-gray-400">
-            Build your profile to get personalized job recommendations
-          </p>
-        </div>
+      {/* Hero Section - ZEP Graph */}
+      <section className="pt-20 pb-8">
+        <div className="max-w-6xl mx-auto px-4">
+          {/* Title */}
+          <div className="text-center mb-8 pt-8">
+            <h1 className="text-4xl md:text-5xl font-black mb-4">
+              {firstName ? `${firstName}'s` : 'Your'}{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500">
+                Career Quest
+              </span>
+            </h1>
+            <p className="text-xl text-gray-400">
+              {allComplete
+                ? getAllCompleteMessage()
+                : nextIncomplete
+                  ? `Next: Complete ${nextIncomplete.name} - ${nextIncomplete.subtitle}`
+                  : 'Build your profile to unlock all characters'}
+            </p>
+          </div>
 
-        {/* Completeness Card */}
-        {completeness && (
-          <div className="mb-8 p-6 bg-gradient-to-r from-cyan-900/20 to-purple-900/20 rounded-2xl border border-cyan-500/30">
+          {/* ZEP Graph */}
+          <div className="relative">
+            <UserProfileGraph
+              graphData={graphData.nodes.length > 1 ? graphData : undefined}
+              className="min-h-[400px]"
+            />
+
+            {/* Empty state overlay */}
+            {graphData.nodes.length <= 1 && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 rounded-xl">
+                <div className="text-center">
+                  <div className="text-5xl mb-4">🎮</div>
+                  <h3 className="text-xl font-bold mb-2">Start Your Quest</h3>
+                  <p className="text-gray-400 mb-4">
+                    Chat with our AI to build your profile
+                  </p>
+                  <Link
+                    href="/"
+                    className="inline-block bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-bold py-2 px-6 rounded-lg"
+                  >
+                    Open AI Chat
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Overall Progress */}
+          <div className="mt-8 p-6 bg-gray-900/50 rounded-2xl border border-gray-800">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              {/* Progress Circle */}
               <div className="flex items-center gap-6">
-                {/* Circular Progress */}
-                <div className="relative w-24 h-24">
-                  <svg className="w-24 h-24 transform -rotate-90">
+                <div className="relative w-20 h-20">
+                  <svg className="w-20 h-20 transform -rotate-90">
                     <circle
-                      cx="48"
-                      cy="48"
-                      r="40"
+                      cx="40"
+                      cy="40"
+                      r="32"
                       stroke="currentColor"
-                      strokeWidth="8"
+                      strokeWidth="6"
                       fill="transparent"
                       className="text-gray-700"
                     />
                     <circle
-                      cx="48"
-                      cy="48"
-                      r="40"
-                      stroke="url(#progressGradient)"
-                      strokeWidth="8"
+                      cx="40"
+                      cy="40"
+                      r="32"
+                      stroke="url(#overallGradient)"
+                      strokeWidth="6"
                       fill="transparent"
-                      strokeDasharray={`${(completeness.percent / 100) * 251.2} 251.2`}
+                      strokeDasharray={`${(overallPercent / 100) * 201} 201`}
                       strokeLinecap="round"
                     />
                     <defs>
-                      <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <linearGradient id="overallGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#22d3ee" />
-                        <stop offset="100%" stopColor="#a855f7" />
+                        <stop offset="50%" stopColor="#a855f7" />
+                        <stop offset="100%" stopColor="#ff00aa" />
                       </linearGradient>
                     </defs>
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">
-                    {completeness.percent}%
+                  <span className="absolute inset-0 flex items-center justify-center text-xl font-bold">
+                    {overallPercent}%
                   </span>
                 </div>
-
                 <div>
-                  <h2 className="text-xl font-bold mb-1">
-                    {completeness.complete ? 'Profile Complete!' : 'Keep Building'}
-                  </h2>
-                  <p className="text-gray-400">
-                    {completeness.missing.length > 0
-                      ? `Add your ${completeness.missing[0]} to improve matches`
-                      : 'Your profile is ready for job matching!'}
+                  <h2 className="text-lg font-bold">Overall Progress</h2>
+                  <p className="text-sm text-gray-400">
+                    {characterCompletions.filter(c => c.isComplete).length}/4 characters complete
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <div className={`px-4 py-2 rounded-lg ${completeness.skills_count > 0 ? 'bg-purple-500/20 text-purple-300' : 'bg-gray-800 text-gray-500'}`}>
-                  <div className="text-2xl font-bold">{completeness.skills_count}</div>
-                  <div className="text-xs">Skills</div>
-                </div>
-                <div className={`px-4 py-2 rounded-lg ${completeness.has_role ? 'bg-blue-500/20 text-blue-300' : 'bg-gray-800 text-gray-500'}`}>
-                  <div className="text-2xl font-bold">{completeness.has_role ? '✓' : '–'}</div>
-                  <div className="text-xs">Role</div>
-                </div>
-                <div className={`px-4 py-2 rounded-lg ${completeness.has_location ? 'bg-green-500/20 text-green-300' : 'bg-gray-800 text-gray-500'}`}>
-                  <div className="text-2xl font-bold">{completeness.has_location ? '✓' : '–'}</div>
-                  <div className="text-xs">Location</div>
-                </div>
+              {/* Character Status Pills */}
+              <div className="flex gap-2 flex-wrap justify-center">
+                {characterCompletions.map((char) => (
+                  <div
+                    key={char.name}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border ${
+                      char.isComplete
+                        ? 'bg-green-500/20 border-green-500/50 text-green-400'
+                        : char.percent > 0
+                          ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
+                          : 'bg-gray-800 border-gray-700 text-gray-500'
+                    }`}
+                  >
+                    {char.name} {char.isComplete ? '✓' : `${char.percent}%`}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        )}
 
-        {/* View Toggle */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex bg-gray-800 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                viewMode === 'list'
-                  ? 'bg-cyan-500 text-black'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              List View
-            </button>
-            <button
-              onClick={() => setViewMode('graph')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                viewMode === 'graph'
-                  ? 'bg-cyan-500 text-black'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              3D Graph
-            </button>
+          {/* Scroll hint */}
+          <div className="text-center mt-8 text-gray-500 animate-bounce">
+            <div className="text-sm mb-2">Scroll to explore your characters</div>
+            <svg className="w-6 h-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
           </div>
         </div>
+      </section>
 
-        {/* Profile Content */}
-        <div className="mb-12">
-          {viewMode === 'graph' ? (
-            <UserProfileGraph
-              graphData={graphData}
-              completeness={completeness || undefined}
-              className="min-h-[500px]"
-            />
-          ) : (
-            <ProfileItemsList
-              graphData={graphData}
-              completeness={completeness || undefined}
-            />
-          )}
-        </div>
+      {/* Character Sections - Scroll Experience */}
+      <RepoCharacter profileItems={profileItems} />
+      <TrinityCharacter profileItems={profileItems} />
+      <VeloCharacter profileItems={profileItems} />
+      <ReachCharacter profileItems={profileItems} />
 
-        {/* Job Assessment Feature Card - Show when profile has some data */}
-        {profileData && completeness && completeness.skills_count > 0 && (
-          <div className="mb-8 p-6 bg-gradient-to-br from-purple-900/30 to-cyan-900/30 rounded-2xl border border-purple-500/30">
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              <div className="flex-shrink-0">
-                <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-white mb-2">Assess Your Job Fit</h3>
-                <p className="text-gray-400 mb-3">
-                  With {completeness.skills_count} skill{completeness.skills_count !== 1 ? 's' : ''} in your profile, you can now see how well you match job requirements.
-                </p>
-                <p className="text-sm text-gray-500">
-                  Browse jobs and click the purple &ldquo;Assess My Fit&rdquo; button to compare your skills against requirements.
-                </p>
-              </div>
-              <Link
-                href="/esports-jobs"
-                className="flex-shrink-0 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-lg transition-all"
-              >
-                Browse Jobs
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* CTA to Build Profile - Empty state */}
-        {(!profileData || completeness?.percent === 0) && (
-          <div className="text-center p-8 bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-gray-700">
-            <div className="text-5xl mb-4">🎮</div>
-            <h3 className="text-2xl font-bold mb-2">Start Building Your Profile</h3>
-            <p className="text-gray-400 mb-6 max-w-lg mx-auto">
-              Chat with our AI to add your skills, target role, and location preferences.
-              The more you share, the better job matches you&apos;ll get!
+      {/* All Complete Celebration */}
+      {allComplete && (
+        <section className="py-16 px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="text-6xl mb-6">🏆</div>
+            <h2 className="text-3xl font-black mb-4">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500">
+                All Characters Unlocked!
+              </span>
+            </h2>
+            <p className="text-xl text-gray-400 mb-8">
+              Your profile is complete. Now let&apos;s find your perfect role!
             </p>
-            <p className="text-sm text-gray-500 mb-4">
-              Try saying: &ldquo;I know Python and JavaScript&rdquo; or &ldquo;I&apos;m looking for marketing roles in London&rdquo;
+            <Link
+              href="/esports-jobs"
+              className="inline-block bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-bold py-4 px-8 rounded-lg text-lg hover:opacity-90 transition-opacity"
+            >
+              Browse Jobs & Assess Your Fit
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {/* CTA to continue building */}
+      {!allComplete && (
+        <section className="py-16 px-4 bg-gray-900/30">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-2xl font-bold mb-4">Continue Your Quest</h2>
+            <p className="text-gray-400 mb-6">
+              Chat with our AI to complete your profile and unlock all characters.
             </p>
             <Link
               href="/"
@@ -374,23 +351,8 @@ export default function ProfilePage() {
               Open AI Chat
             </Link>
           </div>
-        )}
-
-        {/* Partial Profile - Encourage completion */}
-        {profileData && completeness && completeness.percent > 0 && completeness.percent < 80 && (
-          <div className="text-center p-6 bg-gray-900/50 rounded-xl border border-gray-700">
-            <p className="text-gray-400 mb-4">
-              Your profile is {completeness.percent}% complete. Add more {completeness.missing[0]} to improve job matches.
-            </p>
-            <Link
-              href="/"
-              className="inline-block text-cyan-400 hover:text-cyan-300 font-medium"
-            >
-              Continue building with AI Chat →
-            </Link>
-          </div>
-        )}
-      </div>
+        </section>
+      )}
 
       <UnifiedFooter activeSite="jobs" />
     </main>
