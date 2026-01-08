@@ -114,9 +114,12 @@ export function UnifiedHeader({
             {!isPending && (
               user ? (
                 <div className="hidden sm:flex items-center gap-3">
-                  <span className="text-sm text-gray-300">
+                  <Link
+                    href="/profile"
+                    className="text-sm text-gray-300 hover:text-cyan-400 transition-colors"
+                  >
                     Hey, <span className="text-cyan-400 font-medium">{firstName}</span>
-                  </span>
+                  </Link>
                   <button
                     onClick={() => authClient.signOut()}
                     className="text-sm text-gray-400 hover:text-white transition-colors"
