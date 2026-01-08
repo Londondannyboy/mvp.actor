@@ -175,6 +175,8 @@ agent = Agent(
         | "I'm based in London" | save_location_preference |
         | "I have 5 years experience" | save_experience_level |
         | "Is my profile complete?" | check_profile_completeness |
+        | "Check my characters" | check_character_completion |
+        | "Which characters are done?" | check_character_completion |
         | "Am I a good fit for this job?" | assess_job_fit |
         | "Assess my fit" / job match | assess_job_fit |
 
@@ -188,44 +190,48 @@ agent = Agent(
         Example: User on "esports-jobs-london" page asks "show me jobs"
         → Use search_esports_jobs with country filter for UK/London
 
-        ## ONBOARDING FLOW (2 Stages)
-        For NEW users, guide them through a quick 2-stage onboarding:
+        ## CHARACTER-BASED PROFILE SYSTEM
+        Users build their profile through 4 characters. Guide them to complete each:
 
-        ### STAGE 1: REPO (Basic Profile)
-        Validate these key fields:
-        - **Location**: Where are they based / willing to work?
-        - **Target Role**: What kind of job are they looking for?
+        ### REPO - Your Foundation (Cyan)
+        - **What it tracks**: Location, Target Role
+        - **Questions**: "Where are you based?" → "What role are you looking for?"
+        - **Complete message**: "Repo is set - your foundation is solid!"
 
-        If missing, ask ONE question at a time:
-        → "Welcome! To find you the best esports jobs, where are you based?"
-        → After location: "Great! What role are you looking for? (e.g., Marketing, Coaching, Production)"
+        ### TRINITY - Your Identity (Purple)
+        - **What it tracks**: Skills (need 2+), Career Goal
+        - **Questions**: "What are your top 2-3 skills?" → "What's your career goal?"
+        - **Complete message**: "Trinity unlocked - I know your strengths!"
 
-        ### STAGE 2: TRINITY (Skills & Goals)
-        Quick chat about their skills:
-        - **Key Skills**: What are they good at? (ask for 2-3 skills)
-        - **Career Goal**: What do they want to achieve?
+        ### VELO - Your Velocity (Pink)
+        - **What it tracks**: Years of Experience, Career History
+        - **Questions**: "How many years of experience do you have?" → "Tell me about your career path"
+        - **Complete message**: "Velo activated - your momentum is clear!"
 
-        Keep it brief:
-        → "Nice! What are your top 2-3 skills?"
-        → After skills: "Last question - what's your career goal in esports?"
+        ### REACH - Your Network (Gold)
+        - **What it tracks**: Saved Jobs, Profile Visibility
+        - **Always complete** - optional character for expansion
+        - **Message**: "Reach expanded - you're connected!"
 
-        ### STAGE 3: ONBOARDING COMPLETE
-        Once both stages done:
-        → "You're all set! 🎮 I can now find jobs matching your profile."
-        → "Try: 'Find me jobs' or 'Show marketing roles in London'"
-        → Offer to search jobs immediately
+        ## ONBOARDING FLOW
+        For NEW users, guide them through characters in order:
 
-        ### AUTOMATIC DETECTION
-        - Call check_profile_completeness at START of conversation
-        - If has_location AND has_role → Skip Stage 1
-        - If skills_count >= 2 → Skip Stage 2
-        - If both complete → Go straight to helping them search
+        1. **Check status first**: Call check_character_completion at START
+        2. **Guide sequentially**: Repo → Trinity → Velo → Ready to search!
+        3. **Skip completed**: If a character is done, move to the next
+        4. **Celebrate**: When all complete: "All characters unlocked! Let's find your perfect role! 🏆"
 
         ### SAVING DATA
         When user mentions info, save it SILENTLY then confirm briefly:
-        - "I know Python" → save_user_skill("Python") → "Got it, Python added!"
-        - "I'm in London" → save_location_preference("London") → "London noted!"
-        - "Looking for marketing" → save_role_preference("Marketing") → "Marketing it is!"
+        - "I know Python" → save_user_skill("Python") → "Got it, Python added to Trinity!"
+        - "I'm in London" → save_location_preference("London") → "London set for Repo!"
+        - "Looking for marketing" → save_role_preference("Marketing") → "Marketing role locked in!"
+        - "5 years experience" → save_experience_level(5) → "5 years noted for Velo!"
+
+        ### AUTOMATIC DETECTION
+        - Call check_character_completion at START of conversation
+        - Skip to first incomplete character
+        - If all complete → Go straight to helping them search jobs
 
         ## PERSONALIZED ADVICE
         When recommending jobs, FIRST call get_user_skills_and_preferences to understand:
@@ -832,6 +838,101 @@ def assess_job_fit(ctx: RunContext[StateDeps[AppState]], job_id: str) -> dict:
         "recommendation_text": recommendation_text,
         "total_required": len(job_skills),
         "total_matched": len(matched)
+    }
+
+
+@agent.tool
+def check_character_completion(ctx: RunContext[StateDeps[AppState]]) -> dict:
+    """Check completion status for each profile character (Repo, Trinity, Velo, Reach).
+
+    Use this at the START of conversations to determine which character to work on next.
+    Returns status for each character and suggests the next one to complete.
+    """
+    user_id = get_effective_user_id(ctx.deps.state.user)
+    if not user_id:
+        return {
+            "success": False,
+            "message": "User not logged in. Please sign in to build your profile!"
+        }
+
+    print(f"[Tool] Checking character completion for user={user_id}", file=sys.stderr)
+
+    profile = get_profile_items(user_id)
+    items = profile.get("items", {})
+
+    # Calculate completion for each character
+    characters = {
+        "repo": {
+            "name": "Repo",
+            "title": "Your Foundation",
+            "color": "cyan",
+            "complete": bool(items.get("location")) and bool(items.get("role")),
+            "has_location": bool(items.get("location")),
+            "has_role": bool(items.get("role")),
+            "location": items.get("location", [{}])[0].get("value") if items.get("location") else None,
+            "role": items.get("role", [{}])[0].get("value") if items.get("role") else None,
+        },
+        "trinity": {
+            "name": "Trinity",
+            "title": "Your Identity",
+            "color": "purple",
+            "complete": len(items.get("skill", [])) >= 2,
+            "skills_count": len(items.get("skill", [])),
+            "skills": [s.get("value") for s in items.get("skill", [])],
+            "has_career_goal": bool(items.get("career_goal")),
+        },
+        "velo": {
+            "name": "Velo",
+            "title": "Your Velocity",
+            "color": "pink",
+            "complete": bool(items.get("experience_years")),
+            "has_experience": bool(items.get("experience_years")),
+            "experience_years": items.get("experience_years", [{}])[0].get("value") if items.get("experience_years") else None,
+            "has_history": len(items.get("career_history", [])) > 0,
+        },
+        "reach": {
+            "name": "Reach",
+            "title": "Your Network",
+            "color": "gold",
+            "complete": True,  # Always complete - optional expansion
+            "info": "Optional character for expanding your reach",
+        },
+    }
+
+    # Determine overall status
+    completed_count = sum(1 for c in characters.values() if c.get("complete"))
+    all_complete = completed_count == 4
+
+    # Find next incomplete character
+    next_character = None
+    next_message = None
+    for key in ["repo", "trinity", "velo"]:
+        if not characters[key]["complete"]:
+            next_character = characters[key]["name"]
+            if key == "repo":
+                if not characters[key]["has_location"]:
+                    next_message = "Let's start with Repo - where are you based?"
+                else:
+                    next_message = "Almost done with Repo - what role are you looking for?"
+            elif key == "trinity":
+                if characters[key]["skills_count"] < 2:
+                    needed = 2 - characters[key]["skills_count"]
+                    next_message = f"Time for Trinity - tell me {needed} more skill{'s' if needed > 1 else ''} you have"
+                else:
+                    next_message = "Trinity needs a career goal - what do you want to achieve?"
+            elif key == "velo":
+                next_message = "Let's unlock Velo - how many years of experience do you have?"
+            break
+
+    return {
+        "success": True,
+        "characters": characters,
+        "completed_count": completed_count,
+        "total_characters": 4,
+        "all_complete": all_complete,
+        "next_character": next_character,
+        "next_message": next_message,
+        "celebration_message": "All characters unlocked! Let's find your perfect role! 🏆" if all_complete else None,
     }
 
 
