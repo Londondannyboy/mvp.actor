@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Fix ESM module issues with CopilotKit dependencies
+  transpilePackages: ['shiki', 'streamdown'],
   images: {
     remotePatterns: [
       {

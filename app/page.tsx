@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import dynamic from "next/dynamic";
-import { CopilotSidebar } from "@copilotkit/react-ui";
-import { useCoAgent, useRenderToolCall, useCopilotChat } from "@copilotkit/react-core";
-import { Role, TextMessage } from "@copilotkit/runtime-client-gql";
 import { authClient } from "@/app/lib/auth/client";
-import { useCallback, useEffect, Suspense } from "react";
+import { useCallback, useEffect, Suspense, useState } from "react";
 import { esportsJobs } from "../lib/jobs-data";
 import { UnifiedHeader } from "./components/UnifiedHeader";
 import { UnifiedFooter } from "./components/UnifiedFooter";
+import { useCoAgent, useRenderToolCall, useCopilotChat } from "@copilotkit/react-core";
+import { Role, TextMessage } from "@copilotkit/runtime-client-gql";
+
+// Deferred CopilotKit UI - only loads when user clicks to chat
+const CopilotSidebar = dynamic(
+  () => import("@copilotkit/react-ui").then(mod => mod.CopilotSidebar),
+  { ssr: false }
+);
 
 // Dynamic imports for heavy components
 const GamerHero = dynamic(
@@ -183,6 +187,10 @@ export default function Home() {
   const user = session?.user;
   const firstName = user?.name?.split(" ")[0] || null;
 
+  // Deferred loading - only load heavy components when user interacts
+  const [chatEnabled, setChatEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+
   const { state, setState } = useCoAgent<AgentState>({
     name: "esports_agent",
     initialState: { jobs: [], search_query: "", user: undefined },
@@ -224,15 +232,8 @@ export default function Home() {
     },
   });
 
-  return (
-    <CopilotSidebar
-      defaultOpen={false}
-      instructions={agentInstructions}
-      labels={{
-        title: "Esports Jobs AI",
-        initial: firstName ? `Hey ${firstName}! Ready to find your next esports opportunity?` : "Welcome! I can help you find esports jobs, explore companies, or learn about gaming careers.",
-      }}
-    >
+  // Main page content - extracted so it can be wrapped conditionally
+  const pageContent = (
       <main className="min-h-screen bg-[#0a0a0f] text-white overflow-hidden">
         {/* 3D Hero Section - THE CENTERPIECE */}
         <section className="relative h-screen flex items-center justify-center">
@@ -266,17 +267,30 @@ export default function Home() {
               <JobSearch size="large" className="mb-4" />
               <PopularSearches />
             </div>
-            {/* Voice AI button - below search */}
+            {/* Voice AI button - deferred loading */}
             <div className="mt-8 flex flex-col items-center gap-2">
-              <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user?.id} email={user?.email} pageContext={PAGE_CONTEXT} />
+              {voiceEnabled ? (
+                <VoiceInput onMessage={handleVoiceMessage} firstName={firstName} userId={user?.id} email={user?.email} pageContext={PAGE_CONTEXT} />
+              ) : (
+                <button
+                  onClick={() => setVoiceEnabled(true)}
+                  className="relative w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-2xl bg-gradient-to-br from-cyan-500 to-purple-600 hover:scale-110 shadow-purple-500/30"
+                  aria-label="Start voice chat with AI"
+                >
+                  <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </button>
+              )}
               <span className="text-xs text-gray-400 bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">Talk to our AI</span>
             </div>
           </div>
 
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 animate-bounce">
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 animate-bounce" role="presentation" aria-hidden="true">
             <div className="w-6 h-10 rounded-full border-2 border-cyan-500/50 flex items-start justify-center p-2 bg-black/40 backdrop-blur-sm">
               <div className="w-1 h-3 bg-cyan-500 rounded-full animate-pulse" />
             </div>
+            <span className="sr-only">Scroll down for more content</span>
           </div>
         </section>
 
@@ -377,7 +391,7 @@ export default function Home() {
               <Link href={`/job/${featuredJobs[0].id}`} className="block mb-8 rounded-2xl overflow-hidden border-2 border-cyan-500/50 hover:border-cyan-400 transition-all group relative">
                 <div className="relative aspect-[21/9] md:aspect-[3/1]">
                   <img src={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=1&width=600`} alt={featuredJobs[0].heroImageAlt} className="md:hidden w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                  <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=1`} className="hidden md:block w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                  <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=1`} className="hidden md:block w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" aria-label={`Decorative video background for ${featuredJobs[0].title} job listing`}>
                     <source src={`https://stream.mux.com/${MUX_PLAYBACK_ID}.m3u8`} type="application/x-mpegURL" />
                   </video>
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/60 to-transparent" />
@@ -420,11 +434,11 @@ export default function Home() {
                     {hasVideo ? (
                       <>
                         <img src={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=${idx + 2}&width=400`} alt={job.heroImageAlt} className="md:hidden w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                        <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=${idx + 2}`} className="hidden md:block w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                        <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=${idx + 2}`} className="hidden md:block w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" aria-label={`Decorative video for ${job.title}`}>
                           <source src={`https://stream.mux.com/${MUX_PLAYBACK_ID}.m3u8`} type="application/x-mpegURL" />
                         </video>
                         <div className="absolute top-2 left-2">
-                          <span className="px-2 py-1 bg-purple-500/80 rounded text-xs font-bold text-white">▶</span>
+                          <span className="px-2 py-1 bg-purple-500/80 rounded text-xs font-bold text-white" aria-hidden="true">▶</span>
                         </div>
                       </>
                     ) : (
@@ -635,9 +649,9 @@ export default function Home() {
 
         {/* CTA Section with Video */}
         <section className="py-24 relative">
-          <div className="absolute inset-0">
-            <img src={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=3&width=600`} alt="Esports jobs and gaming careers background" className="md:hidden w-full h-full object-cover opacity-30" loading="lazy" />
-            <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=3`} className="hidden md:block w-full h-full object-cover opacity-30">
+          <div className="absolute inset-0" aria-hidden="true">
+            <img src={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=3&width=600`} alt="" className="md:hidden w-full h-full object-cover opacity-30" loading="lazy" />
+            <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=3`} className="hidden md:block w-full h-full object-cover opacity-30" aria-hidden="true">
               <source src={`https://stream.mux.com/${MUX_PLAYBACK_ID}.m3u8`} type="application/x-mpegURL" />
             </video>
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/90 to-purple-900/90" />
@@ -658,8 +672,8 @@ export default function Home() {
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div className="relative">
                 <div className="aspect-video rounded-2xl overflow-hidden neon-border-purple">
-                  <img src={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=6&width=600`} alt="Esports recruitment agency team" className="md:hidden w-full h-full object-cover" loading="lazy" />
-                  <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=6`} className="hidden md:block w-full h-full object-cover">
+                  <img src={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=6&width=600`} alt="Esports recruitment agency promotional video thumbnail" className="md:hidden w-full h-full object-cover" loading="lazy" />
+                  <video autoPlay muted loop playsInline preload="none" poster={`https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.webp?time=6`} className="hidden md:block w-full h-full object-cover" aria-label="Promotional video showcasing esports recruitment services">
                     <source src={`https://stream.mux.com/${MUX_PLAYBACK_ID}.m3u8`} type="application/x-mpegURL" />
                   </video>
                 </div>
@@ -873,6 +887,38 @@ export default function Home() {
           ]}
         />
       </main>
-    </CopilotSidebar>
+    );
+
+  // Render with deferred chat - only load CopilotSidebar when user clicks chat button
+  if (chatEnabled) {
+    return (
+      <CopilotSidebar
+        defaultOpen={true}
+        instructions={agentInstructions}
+        labels={{
+          title: "Esports Jobs AI",
+          initial: firstName ? `Hey ${firstName}! Ready to find your next esports opportunity?` : "Welcome! I can help you find esports jobs, explore companies, or learn about gaming careers.",
+        }}
+      >
+        {pageContent}
+      </CopilotSidebar>
+    );
+  }
+
+  // Initial render - no CopilotSidebar loaded yet, show chat button
+  return (
+    <>
+      {pageContent}
+      {/* Floating chat button - loads CopilotSidebar on click */}
+      <button
+        onClick={() => setChatEnabled(true)}
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-full shadow-lg shadow-purple-500/30 flex items-center justify-center hover:scale-110 transition-transform"
+        aria-label="Open AI chat assistant"
+      >
+        <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      </button>
+    </>
   );
 }

@@ -71,8 +71,8 @@ function FloatingElements() {
   return (
     <group ref={ref}>
       {/* Floating cubes representing game elements */}
-      {[...Array(8)].map((_, i) => {
-        const angle = (i / 8) * Math.PI * 2
+      {[...Array(5)].map((_, i) => {
+        const angle = (i / 5) * Math.PI * 2
         const radius = 3 + Math.sin(i) * 0.5
         return (
           <Float
@@ -209,7 +209,7 @@ function Scene({ animationSpeed }: { animationSpeed: number }) {
       {/* Environment */}
       <FloatingElements />
       <NeonGrid />
-      <Particles count={150} />
+      <Particles count={50} />
 
       {/* Camera movement */}
       <CameraRig />
@@ -238,9 +238,22 @@ interface GamerHeroProps {
 export function GamerHero({ className = '' }: GamerHeroProps) {
   // Auto-animate: cycle between idle, walk, run for constant motion
   const [animationSpeed, setAnimationSpeed] = useState(0.3) // Start walking
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
 
-  // Cycle animation for constant visual interest
+  // Check for reduced motion preference
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mediaQuery.matches)
+
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+    mediaQuery.addEventListener('change', handler)
+    return () => mediaQuery.removeEventListener('change', handler)
+  }, [])
+
+  // Cycle animation for constant visual interest (skip if reduced motion preferred)
+  useEffect(() => {
+    if (prefersReducedMotion) return
+
     let direction = 1
     const interval = setInterval(() => {
       setAnimationSpeed(prev => {
@@ -252,19 +265,21 @@ export function GamerHero({ className = '' }: GamerHeroProps) {
     }, 2000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [prefersReducedMotion])
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} role="img" aria-label="Animated 3D esports soldier character with floating neon elements representing the gaming industry">
       {/* Purple gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-[#0a0a0f] to-cyan-900/30" />
       <Canvas
         shadows
         camera={{ position: [0, 1, 5], fov: 50 }}
         style={{ background: 'transparent' }}
+        aria-hidden="true"
+        frameloop={prefersReducedMotion ? 'demand' : 'always'}
       >
         <Suspense fallback={<Loader />}>
-          <Scene animationSpeed={animationSpeed} />
+          <Scene animationSpeed={prefersReducedMotion ? 0 : animationSpeed} />
         </Suspense>
       </Canvas>
 
