@@ -181,6 +181,7 @@ function Loader() {
 }
 
 // Video hero component - used for initial load and mobile
+// Uses HLS streaming (.m3u8) which is initialized by HlsVideoInit component
 function VideoHero({ className = '' }: { className?: string }) {
   return (
     <div className={`absolute inset-0 ${className}`}>
@@ -189,12 +190,13 @@ function VideoHero({ className = '' }: { className?: string }) {
         muted
         loop
         playsInline
-        preload="metadata"
+        preload="auto"
         poster={`https://image.mux.com/${MUX_HERO_PLAYBACK_ID}/thumbnail.webp?time=2&width=1200`}
         className="w-full h-full object-cover"
         aria-hidden="true"
       >
-        <source src={`https://stream.mux.com/${MUX_HERO_PLAYBACK_ID}/low.mp4`} type="video/mp4" />
+        {/* HLS streaming - HlsVideoInit will pick this up and initialize hls.js */}
+        <source src={`https://stream.mux.com/${MUX_HERO_PLAYBACK_ID}.m3u8`} type="application/x-mpegURL" />
       </video>
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
     </div>
@@ -247,10 +249,14 @@ export function GamerHero({ className = '' }: GamerHeroProps) {
 
     // VIDEO → 3D SWAP: Wait for page load + delay, then show 3D on desktop
     // This gives Lighthouse fast LCP with video, then upgrades to 3D
+    // Longer delay = better Lighthouse score + users enjoy the video more
     const swapTo3D = () => {
       if (window.innerWidth >= 768) {
-        // Delay swap to ensure Lighthouse captures fast video LCP
-        setTimeout(() => setShow3D(true), 2000)
+        // 5 second delay ensures:
+        // 1. Lighthouse measures fast video LCP
+        // 2. Users enjoy the video before 3D loads
+        // 3. 3D assets load in background during video playback
+        setTimeout(() => setShow3D(true), 5000)
       }
     }
 
