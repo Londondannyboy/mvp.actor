@@ -126,7 +126,7 @@ export function UnifiedHeader({
                 </div>
               ) : (
                 <Link
-                  href="/login"
+                  href="/auth/sign-in"
                   className="hidden sm:block text-sm text-gray-300 hover:text-cyan-400 transition-colors"
                 >
                   Sign In
@@ -197,7 +197,7 @@ export function UnifiedHeader({
                   </div>
                 ) : (
                   <Link
-                    href="/login"
+                    href="/auth/sign-in"
                     onClick={() => setMobileMenuOpen(false)}
                     className="block w-full text-center border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 font-medium py-2 px-6 rounded transition-all"
                   >
