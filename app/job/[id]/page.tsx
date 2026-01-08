@@ -6,6 +6,7 @@ import { UnifiedFooter } from "../../components/UnifiedFooter";
 import { SkillsGraph } from "../../components/SkillsGraph";
 import { SidebarPanels } from "../../components/SidebarPanels";
 import { HeyCompaniesCompact } from "../../components/HeyCompanies";
+import { JobPageClient } from "./JobPageClient";
 import { esportsJobs, getJobById, generateJobPostingSchema, EsportsJob } from "../../../lib/jobs-data";
 
 // Generate static params for all jobs
@@ -86,7 +87,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     .slice(0, 3);
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <JobPageClient jobId={job.id} jobTitle={job.title} jobCompany={job.company}>
+      <main className="min-h-screen bg-[#0a0a0f] text-white">
       {/* JobPosting Schema */}
       <script
         type="application/ld+json"
@@ -368,7 +370,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      <UnifiedFooter activeSite="jobs" />
-    </main>
+        <UnifiedFooter activeSite="jobs" />
+      </main>
+    </JobPageClient>
   );
 }
