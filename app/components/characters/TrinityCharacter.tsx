@@ -1,7 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { CharacterSection, SkillsDisplay, ProfileItem } from '../CharacterSection';
 import { CHARACTERS, getCharacterCompletion, type ProfileItems } from '@/lib/character-config';
+
+const TrinitySkillsGraph = dynamic(
+  () => import('../graphs').then(mod => mod.TrinitySkillsGraph),
+  { ssr: false }
+);
 
 interface TrinityCharacterProps {
   profileItems: ProfileItems;
@@ -27,6 +33,15 @@ export function TrinityCharacter({ profileItems }: TrinityCharacterProps) {
       isComplete={completion.isComplete}
       completionPercent={completion.percent}
     >
+      {/* Skills Constellation Graph */}
+      {skills.length > 0 && (
+        <TrinitySkillsGraph
+          skills={skills}
+          careerGoal={careerGoal?.value}
+          className="mb-6"
+        />
+      )}
+
       <SkillsDisplay
         skills={skills}
         color={TRINITY_CONFIG.color}

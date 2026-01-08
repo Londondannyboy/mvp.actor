@@ -1,11 +1,25 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { CharacterSection, ProfileItem } from '../CharacterSection';
 import { CHARACTERS, getCharacterCompletion, type ProfileItems } from '@/lib/character-config';
 
+const ReachNetworkGraph = dynamic(
+  () => import('../graphs').then(mod => mod.ReachNetworkGraph),
+  { ssr: false }
+);
+
+interface SavedJob {
+  id: string;
+  title: string;
+  company: string;
+  matchScore?: number;
+}
+
 interface ReachCharacterProps {
   profileItems: ProfileItems;
+  savedJobs?: SavedJob[];
   savedJobsCount?: number;
   assessmentsCount?: number;
 }
@@ -14,9 +28,12 @@ const REACH_CONFIG = CHARACTERS.find(c => c.name === 'Reach')!;
 
 export function ReachCharacter({
   profileItems,
-  savedJobsCount = 0,
+  savedJobs = [],
+  savedJobsCount,
   assessmentsCount = 0,
 }: ReachCharacterProps) {
+  // Use provided count or derive from savedJobs array
+  const jobsCount = savedJobsCount ?? savedJobs.length;
   const completion = getCharacterCompletion(REACH_CONFIG, profileItems);
 
   const visibility = profileItems.network_visibility?.[0];
@@ -33,13 +50,22 @@ export function ReachCharacter({
       isComplete={completion.isComplete}
       completionPercent={completion.percent}
     >
+      {/* Network Graph - shows reach with saved jobs and assessments */}
+      {(savedJobs.length > 0 || assessmentsCount > 0) && (
+        <ReachNetworkGraph
+          savedJobs={savedJobs}
+          assessmentsCount={assessmentsCount}
+          className="mb-6"
+        />
+      )}
+
       <div className="space-y-4">
         {/* Saved Jobs */}
         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50">
           <div>
             <div className="text-sm text-gray-500">Saved Jobs</div>
             <div className="text-2xl font-bold" style={{ color: REACH_CONFIG.color }}>
-              {savedJobsCount}
+              {jobsCount}
             </div>
           </div>
           <Link

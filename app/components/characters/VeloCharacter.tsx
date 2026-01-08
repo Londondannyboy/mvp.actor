@@ -1,7 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { CharacterSection, ProfileItem } from '../CharacterSection';
 import { CHARACTERS, getCharacterCompletion, type ProfileItems } from '@/lib/character-config';
+
+const VeloTimelineGraph = dynamic(
+  () => import('../graphs').then(mod => mod.VeloTimelineGraph),
+  { ssr: false }
+);
 
 interface VeloCharacterProps {
   profileItems: ProfileItems;
@@ -27,6 +33,13 @@ export function VeloCharacter({ profileItems }: VeloCharacterProps) {
       isComplete={completion.isComplete}
       completionPercent={completion.percent}
     >
+      {/* Velocity Timeline Graph */}
+      <VeloTimelineGraph
+        experienceYears={experienceYears?.value}
+        careerHistory={careerHistory}
+        className="mb-6"
+      />
+
       <ProfileItem
         label="Years of Experience"
         value={experienceYears?.value ? `${experienceYears.value} years` : undefined}
