@@ -17,6 +17,16 @@ const CopilotSidebar = dynamic(
 );
 
 
+// UserProfileGraph - lazy loaded for chat visualization
+const UserProfileGraph = dynamic(
+  () => import("./components/UserProfileGraph").then(mod => mod.UserProfileGraph),
+  { ssr: false }
+);
+const ProfileItemsList = dynamic(
+  () => import("./components/UserProfileGraph").then(mod => mod.ProfileItemsList),
+  { ssr: false }
+);
+
 // Three.js Spotlight Walk - lazy loaded
 const ThreeSpotlightWalk = dynamic(
   () => import("./components/ThreeSpotlightWalk").then(mod => mod.ThreeSpotlightWalk),
@@ -246,6 +256,104 @@ export default function Home() {
     render: ({ status }) => {
       if (status === "executing") {
         return <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-700 animate-pulse"><p className="text-sm text-gray-400">Searching jobs...</p></div>;
+      }
+      return null;
+    },
+  });
+
+  // Render profile graph when agent calls show_user_profile_graph
+  useRenderToolCall({
+    name: "show_user_profile_graph",
+    render: ({ status, result }) => {
+      if (status === "executing") {
+        return (
+          <div className="p-4 rounded-lg bg-gray-800/50 border border-purple-500/30 animate-pulse">
+            <p className="text-sm text-purple-400">Loading your profile...</p>
+          </div>
+        );
+      }
+      if (status === "complete" && result?.render) {
+        return (
+          <div className="my-4">
+            <ProfileItemsList
+              graphData={result.graph}
+              completeness={result.completeness}
+            />
+          </div>
+        );
+      }
+      return null;
+    },
+  });
+
+  // Render skill save confirmation
+  useRenderToolCall({
+    name: "save_user_skill",
+    render: ({ status, result }) => {
+      if (status === "executing") {
+        return (
+          <div className="p-3 rounded-lg bg-purple-500/20 border border-purple-500/30 animate-pulse">
+            <p className="text-sm text-purple-400">Adding skill to your profile...</p>
+          </div>
+        );
+      }
+      if (status === "complete" && result?.success) {
+        return (
+          <div className="p-3 rounded-lg bg-purple-500/20 border border-purple-500/50">
+            <p className="text-sm text-purple-300">
+              ✓ Added <span className="font-medium text-white">{result.skill}</span> ({result.proficiency}) to your profile
+            </p>
+          </div>
+        );
+      }
+      return null;
+    },
+  });
+
+  // Render role preference save confirmation
+  useRenderToolCall({
+    name: "save_role_preference",
+    render: ({ status, result }) => {
+      if (status === "executing") {
+        return (
+          <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 animate-pulse">
+            <p className="text-sm text-blue-400">Setting your target role...</p>
+          </div>
+        );
+      }
+      if (status === "complete" && result?.success) {
+        return (
+          <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/50">
+            <p className="text-sm text-blue-300">
+              ✓ Target role set to <span className="font-medium text-white">{result.role}</span>
+            </p>
+          </div>
+        );
+      }
+      return null;
+    },
+  });
+
+  // Render location preference save confirmation
+  useRenderToolCall({
+    name: "save_location_preference",
+    render: ({ status, result }) => {
+      if (status === "executing") {
+        return (
+          <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/30 animate-pulse">
+            <p className="text-sm text-green-400">Setting your location preference...</p>
+          </div>
+        );
+      }
+      if (status === "complete" && result?.success) {
+        return (
+          <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/50">
+            <p className="text-sm text-green-300">
+              ✓ Location set to <span className="font-medium text-white">{result.location}</span>
+              {result.remote_ok && <span className="text-green-400"> (Remote OK)</span>}
+            </p>
+          </div>
+        );
       }
       return null;
     },
