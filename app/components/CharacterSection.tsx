@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import type { CharacterName, AnimationType } from '@/lib/character-config';
+import { getCharacterDialogue } from '@/lib/gamification';
 
 // Lazy load the 3D character model
 const CharacterModel = dynamic(
@@ -15,6 +16,12 @@ const CharacterModel = dynamic(
       </div>
     ),
   }
+);
+
+// Lazy load speech bubble
+const CharacterSpeechBubble = dynamic(
+  () => import('./gamification').then(mod => mod.CharacterSpeechBubble),
+  { ssr: false }
 );
 
 interface CharacterSectionProps {
@@ -84,8 +91,12 @@ export function CharacterSection({
     return 'text-gray-500';
   };
 
+  // Get character dialogue based on state
+  const dialogue = getCharacterDialogue(name, completionPercent, isComplete);
+
   return (
     <section
+      id={`section-${name.toLowerCase()}`}
       ref={sectionRef}
       className={`
         relative min-h-[500px] py-16 px-4 md:px-8
@@ -127,6 +138,17 @@ export function CharacterSection({
               isComplete={isComplete}
               completionPercent={completionPercent}
             />
+
+            {/* Character Speech Bubble */}
+            {isVisible && dialogue && (
+              <div className="absolute bottom-4 left-4 right-4">
+                <CharacterSpeechBubble
+                  message={dialogue}
+                  color={color}
+                  position="left"
+                />
+              </div>
+            )}
           </div>
 
           {/* Profile Data */}
@@ -256,11 +278,11 @@ export function SkillsDisplay({ skills, color, minRequired }: SkillsDisplayProps
               }}
             >
               {skill.value}
-              {skill.metadata?.proficiency && (
+              {skill.metadata?.proficiency ? (
                 <span className="ml-1 opacity-60">
                   ({String(skill.metadata.proficiency)})
                 </span>
-              )}
+              ) : null}
             </span>
           ))}
         </div>

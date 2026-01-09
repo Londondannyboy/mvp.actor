@@ -73,6 +73,10 @@ const CharacterSpeechBubble = dynamic(
   () => import('../components/gamification').then(mod => mod.CharacterSpeechBubble),
   { ssr: false }
 );
+const ScrollNavigation = dynamic(
+  () => import('../components/gamification').then(mod => mod.ScrollNavigation),
+  { ssr: false }
+);
 
 interface ProfileItem {
   value: string;
@@ -245,8 +249,11 @@ export default function ProfilePage() {
 
       <UnifiedHeader activeSite="jobs" siteNavItems={JOBS_SITE_NAV_ITEMS} />
 
+      {/* Side Navigation */}
+      <ScrollNavigation />
+
       {/* Hero Section - XP & Level */}
-      <section className="pt-20 pb-8 relative z-10">
+      <section id="section-hero" className="pt-20 pb-8 relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           {/* Title */}
           <div className="text-center mb-8 pt-8">
