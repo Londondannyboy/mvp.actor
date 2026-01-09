@@ -45,9 +45,9 @@ const SITE_TABS = [
 
 // Global navigation items for the jobs site - use this on ALL pages
 export const JOBS_SITE_NAV_ITEMS = [
+  { label: 'My Quest', href: '/profile' },
   { label: 'Esports Jobs', href: '/esports-jobs' },
   { label: 'Career Guides', href: '/esports-careers' },
-  { label: 'Salary Guide', href: '/esports-salary-guide-uk' },
   { label: 'News', href: '/esports-news' },
 ];
 
