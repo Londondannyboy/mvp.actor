@@ -13,6 +13,13 @@ import {
   getNextIncompleteCharacter,
   getAllCompleteMessage,
 } from '@/lib/character-config';
+import {
+  calculateXP,
+  getLevel,
+  getUnlockedAchievements,
+  getLockedAchievements,
+  getCharacterDialogue,
+} from '@/lib/gamification';
 
 // Dynamic imports for heavy components
 const UserProfileGraph = dynamic(
@@ -45,6 +52,28 @@ const ReachCharacter = dynamic(
   { ssr: false }
 );
 
+// Dynamic imports for gamification components
+const XPLevelDisplay = dynamic(
+  () => import('../components/gamification').then(mod => mod.XPLevelDisplay),
+  { ssr: false }
+);
+const AchievementBadges = dynamic(
+  () => import('../components/gamification').then(mod => mod.AchievementBadges),
+  { ssr: false }
+);
+const AnimatedBackground = dynamic(
+  () => import('../components/gamification').then(mod => mod.AnimatedBackground),
+  { ssr: false }
+);
+const Confetti = dynamic(
+  () => import('../components/gamification').then(mod => mod.Confetti),
+  { ssr: false }
+);
+const CharacterSpeechBubble = dynamic(
+  () => import('../components/gamification').then(mod => mod.CharacterSpeechBubble),
+  { ssr: false }
+);
+
 interface ProfileItem {
   value: string;
   metadata: Record<string, unknown>;
@@ -60,6 +89,9 @@ export default function ProfilePage() {
   const [profileItems, setProfileItems] = useState<ProfileItems>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [savedJobsCount, setSavedJobsCount] = useState(0);
+  const [assessmentsCount, setAssessmentsCount] = useState(0);
 
   // Fetch profile data from API
   useEffect(() => {
@@ -91,6 +123,11 @@ export default function ProfilePage() {
         }
 
         setProfileItems(items);
+
+        // TODO: Fetch actual saved jobs and assessments count from API
+        // For now, use placeholder data
+        setSavedJobsCount(data.savedJobsCount || 0);
+        setAssessmentsCount(data.assessmentsCount || 0);
       } catch (e) {
         setError('Failed to load profile');
         console.error(e);
@@ -109,6 +146,21 @@ export default function ProfilePage() {
   const characterCompletions = getAllCharacterCompletions(profileItems);
   const nextIncomplete = getNextIncompleteCharacter(profileItems);
   const allComplete = characterCompletions.every(c => c.isComplete);
+
+  // Calculate gamification data
+  const xpData = calculateXP(profileItems, savedJobsCount, assessmentsCount);
+  const level = getLevel(xpData.total);
+  const unlockedAchievements = getUnlockedAchievements(profileItems, savedJobsCount, assessmentsCount);
+  const lockedAchievements = getLockedAchievements(profileItems, savedJobsCount, assessmentsCount);
+
+  // Trigger confetti when all complete
+  useEffect(() => {
+    if (allComplete && !showConfetti) {
+      setShowConfetti(true);
+      // Reset after animation
+      setTimeout(() => setShowConfetti(false), 6000);
+    }
+  }, [allComplete, showConfetti]);
 
   // Convert profile data to graph format for ZEP visualization
   const graphData = {
@@ -181,11 +233,20 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#0a0a0f] text-white relative">
+      {/* Animated Background */}
+      <AnimatedBackground
+        colors={['#22d3ee', '#a855f7', '#ff00aa', '#ffd700']}
+        particleCount={40}
+      />
+
+      {/* Confetti Celebration */}
+      <Confetti active={showConfetti} duration={5000} />
+
       <UnifiedHeader activeSite="jobs" siteNavItems={JOBS_SITE_NAV_ITEMS} />
 
-      {/* Hero Section - ZEP Graph */}
-      <section className="pt-20 pb-8">
+      {/* Hero Section - XP & Level */}
+      <section className="pt-20 pb-8 relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           {/* Title */}
           <div className="text-center mb-8 pt-8">
@@ -195,13 +256,39 @@ export default function ProfilePage() {
                 Career Quest
               </span>
             </h1>
-            <p className="text-xl text-gray-400">
-              {allComplete
-                ? getAllCompleteMessage()
-                : nextIncomplete
-                  ? `Next: Complete ${nextIncomplete.name} - ${nextIncomplete.subtitle}`
-                  : 'Build your profile to unlock all characters'}
-            </p>
+
+            {/* Dynamic Subtitle with Character Speech */}
+            <div className="max-w-md mx-auto mt-4">
+              {nextIncomplete ? (
+                <CharacterSpeechBubble
+                  message={getCharacterDialogue(
+                    nextIncomplete.name,
+                    characterCompletions.find(c => c.name === nextIncomplete.name)?.percent || 0,
+                    false
+                  )}
+                  color={nextIncomplete.color}
+                  position="right"
+                />
+              ) : (
+                <p className="text-xl text-gray-400">{getAllCompleteMessage()}</p>
+              )}
+            </div>
+          </div>
+
+          {/* XP & Level Display */}
+          <XPLevelDisplay
+            xp={xpData.total}
+            level={level}
+            breakdown={xpData.breakdown}
+            className="mb-8"
+          />
+
+          {/* Achievements */}
+          <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800 mb-8">
+            <AchievementBadges
+              unlocked={unlockedAchievements}
+              locked={lockedAchievements}
+            />
           </div>
 
           {/* ZEP Graph */}
@@ -270,7 +357,7 @@ export default function ProfilePage() {
                   </span>
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold">Overall Progress</h2>
+                  <h2 className="text-lg font-bold">Character Progress</h2>
                   <p className="text-sm text-gray-400">
                     {characterCompletions.filter(c => c.isComplete).length}/4 characters complete
                   </p>
@@ -282,13 +369,14 @@ export default function ProfilePage() {
                 {characterCompletions.map((char) => (
                   <div
                     key={char.name}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium border ${
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
                       char.isComplete
-                        ? 'bg-green-500/20 border-green-500/50 text-green-400'
+                        ? 'bg-green-500/20 border-green-500/50 text-green-400 animate-glow-pulse'
                         : char.percent > 0
                           ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
                           : 'bg-gray-800 border-gray-700 text-gray-500'
                     }`}
+                    style={char.isComplete ? { color: 'green' } : {}}
                   >
                     {char.name} {char.isComplete ? '✓' : `${char.percent}%`}
                   </div>
@@ -308,16 +396,22 @@ export default function ProfilePage() {
       </section>
 
       {/* Character Sections - Scroll Experience */}
-      <RepoCharacter profileItems={profileItems} />
-      <TrinityCharacter profileItems={profileItems} />
-      <VeloCharacter profileItems={profileItems} />
-      <ReachCharacter profileItems={profileItems} />
+      <div className="relative z-10">
+        <RepoCharacter profileItems={profileItems} />
+        <TrinityCharacter profileItems={profileItems} />
+        <VeloCharacter profileItems={profileItems} />
+        <ReachCharacter
+          profileItems={profileItems}
+          savedJobsCount={savedJobsCount}
+          assessmentsCount={assessmentsCount}
+        />
+      </div>
 
       {/* All Complete Celebration */}
       {allComplete && (
-        <section className="py-16 px-4">
+        <section className="py-16 px-4 relative z-10">
           <div className="max-w-4xl mx-auto text-center">
-            <div className="text-6xl mb-6">🏆</div>
+            <div className="text-6xl mb-6 animate-bounce-slow">🏆</div>
             <h2 className="text-3xl font-black mb-4">
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500">
                 All Characters Unlocked!
@@ -328,7 +422,7 @@ export default function ProfilePage() {
             </p>
             <Link
               href="/esports-jobs"
-              className="inline-block bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-bold py-4 px-8 rounded-lg text-lg hover:opacity-90 transition-opacity"
+              className="inline-block bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-bold py-4 px-8 rounded-lg text-lg hover:opacity-90 transition-opacity animate-glow-pulse"
             >
               Browse Jobs & Assess Your Fit
             </Link>
@@ -338,23 +432,33 @@ export default function ProfilePage() {
 
       {/* CTA to continue building */}
       {!allComplete && (
-        <section className="py-16 px-4 bg-gray-900/30">
+        <section className="py-16 px-4 bg-gray-900/30 relative z-10">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-2xl font-bold mb-4">Continue Your Quest</h2>
             <p className="text-gray-400 mb-6">
               Chat with our AI to complete your profile and unlock all characters.
             </p>
-            <Link
-              href="/"
-              className="inline-block bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-bold py-3 px-8 rounded-lg transition-all"
-            >
-              Open AI Chat
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/"
+                className="inline-block bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-bold py-3 px-8 rounded-lg transition-all"
+              >
+                Open AI Chat
+              </Link>
+              <Link
+                href="/esports-jobs"
+                className="inline-block bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg transition-all border border-gray-700"
+              >
+                Browse Jobs
+              </Link>
+            </div>
           </div>
         </section>
       )}
 
-      <UnifiedFooter activeSite="jobs" />
+      <div className="relative z-10">
+        <UnifiedFooter activeSite="jobs" />
+      </div>
     </main>
   );
 }
