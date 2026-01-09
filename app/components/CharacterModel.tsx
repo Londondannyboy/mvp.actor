@@ -2,16 +2,18 @@
 
 /**
  * Character Model - Single Animated 3D Character for Profile Sections
- * Based on ThreeCareerShowcase pattern with completion-based visual effects
+ * Fixed animation binding for cloned scenes
  */
 
 import { Suspense, useRef, useEffect, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useGLTF, useAnimations } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import type { AnimationType } from '@/lib/character-config';
 
 interface CharacterModelProps {
-  animation: 'Idle' | 'Walk' | 'Run';
+  animation: AnimationType;
   color: string;
   isComplete: boolean;
   completionPercent: number;
@@ -26,26 +28,17 @@ function Soldier({
 }: CharacterModelProps) {
   const group = useRef<THREE.Group>(null);
   const platformRef = useRef<THREE.Mesh>(null);
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
 
-  const { scene, animations } = useGLTF('/models/Soldier.glb', true);
+  const { scene, animations } = useGLTF('/models/Soldier.glb');
 
-  // Clone the scene for this instance
+  // Clone the scene and set up animations properly
   const clonedScene = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((child) => {
-      if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
-        const skinnedMesh = child as THREE.SkinnedMesh;
-        skinnedMesh.skeleton = skinnedMesh.skeleton.clone();
-        skinnedMesh.bindMatrix = skinnedMesh.bindMatrix.clone();
-        skinnedMesh.bindMatrixInverse = skinnedMesh.bindMatrixInverse.clone();
-      }
-    });
+    const clone = cloneSkeleton(scene);
     return clone;
   }, [scene]);
 
-  const { actions } = useAnimations(animations, group);
-
-  // Setup shadows
+  // Set up shadows and materials
   useEffect(() => {
     clonedScene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -55,36 +48,50 @@ function Soldier({
         // Apply grayscale effect for incomplete characters
         if (completionPercent === 0) {
           const mesh = child as THREE.Mesh;
-          if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).color) {
-            const mat = mesh.material as THREE.MeshStandardMaterial;
-            mat.color.setHSL(0, 0, 0.4); // Grayscale
+          if (mesh.material) {
+            const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+            mat.color.setHSL(0, 0, 0.4);
+            mesh.material = mat;
           }
         }
       }
     });
   }, [clonedScene, completionPercent]);
 
-  // Play the specified animation with speed based on completion
+  // Set up animation mixer and play animation
   useEffect(() => {
-    const action = actions[animation];
-    if (action) {
-      // Slow animation for incomplete characters
-      const speed = completionPercent === 0 ? 0.5 : 1.0;
-      action.setEffectiveTimeScale(speed);
-      action.reset().fadeIn(0.3).play();
-    }
-    return () => {
-      actions[animation]?.fadeOut(0.3);
-    };
-  }, [actions, animation, completionPercent]);
+    if (!clonedScene || animations.length === 0) return;
 
-  // Animate platform glow
-  useFrame((state) => {
+    // Create mixer for this cloned scene
+    const mixer = new THREE.AnimationMixer(clonedScene);
+    mixerRef.current = mixer;
+
+    // Find the matching animation clip
+    const clip = animations.find((a) => a.name === animation);
+    if (clip) {
+      const action = mixer.clipAction(clip);
+      // Slow animation for incomplete characters
+      action.setEffectiveTimeScale(completionPercent === 0 ? 0.5 : 1.0);
+      action.play();
+    }
+
+    return () => {
+      mixer.stopAllAction();
+      mixer.uncacheRoot(clonedScene);
+    };
+  }, [clonedScene, animations, animation, completionPercent]);
+
+  // Update animation mixer every frame
+  useFrame((_, delta) => {
+    if (mixerRef.current) {
+      mixerRef.current.update(delta);
+    }
+
+    // Animate platform glow
     if (platformRef.current) {
       const material = platformRef.current.material as THREE.MeshStandardMaterial;
-      // Pulse effect based on completion
       const baseIntensity = isComplete ? 0.6 : completionPercent > 0 ? 0.3 : 0.1;
-      const pulse = isComplete ? Math.sin(state.clock.elapsedTime * 2) * 0.2 : 0;
+      const pulse = isComplete ? Math.sin(Date.now() * 0.002) * 0.2 : 0;
       material.emissiveIntensity = baseIntensity + pulse;
     }
   });
