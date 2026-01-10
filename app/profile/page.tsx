@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { authClient } from '@/app/lib/auth/client';
 import { UnifiedHeader, JOBS_SITE_NAV_ITEMS } from '@/app/components/UnifiedHeader';
 import { UnifiedFooter } from '@/app/components/UnifiedFooter';
@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
   type ProfileItems,
+  type CharacterName,
   getOverallCompletion,
   getAllCharacterCompletions,
   getNextIncompleteCharacter,
@@ -78,6 +79,16 @@ const ScrollNavigation = dynamic(
   { ssr: false }
 );
 
+// Dynamic imports for celebration components
+const CharacterUnlockCelebration = dynamic(
+  () => import('../components/gamification').then(mod => mod.CharacterUnlockCelebration),
+  { ssr: false }
+);
+const XPNotificationContainer = dynamic(
+  () => import('../components/gamification').then(mod => mod.XPNotificationContainer),
+  { ssr: false }
+);
+
 interface ProfileItem {
   value: string;
   metadata: Record<string, unknown>;
@@ -92,10 +103,45 @@ export default function ProfilePage() {
 
   const [profileItems, setProfileItems] = useState<ProfileItems>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [savedJobsCount, setSavedJobsCount] = useState(0);
   const [assessmentsCount, setAssessmentsCount] = useState(0);
+
+  // Celebration state
+  const [celebratingCharacter, setCelebratingCharacter] = useState<CharacterName | null>(null);
+  const celebrationQueueRef = useRef<CharacterName[]>([]);
+  const [xpNotifications, setXPNotifications] = useState<{ id: string; amount: number; description?: string }[]>([]);
+  const xpCounterRef = useRef(0);
+  const prevCompletionsRef = useRef<Record<string, boolean>>({});
+
+  // XP notification helpers
+  const showXPGain = useCallback((amount: number, description?: string) => {
+    const id = `xp-${xpCounterRef.current++}`;
+    setXPNotifications((prev) => [...prev, { id, amount, description }]);
+  }, []);
+
+  const removeXPNotification = useCallback((id: string) => {
+    setXPNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  // Character celebration helpers
+  const showCharacterCelebration = useCallback((characterName: CharacterName) => {
+    if (celebratingCharacter) {
+      celebrationQueueRef.current.push(characterName);
+    } else {
+      setCelebratingCharacter(characterName);
+    }
+  }, [celebratingCharacter]);
+
+  const handleCelebrationComplete = useCallback(() => {
+    if (celebrationQueueRef.current.length > 0) {
+      const next = celebrationQueueRef.current.shift();
+      setCelebratingCharacter(next || null);
+    } else {
+      setCelebratingCharacter(null);
+    }
+  }, []);
 
   // Fetch profile data from API
   useEffect(() => {
@@ -165,6 +211,30 @@ export default function ProfilePage() {
       setTimeout(() => setShowConfetti(false), 6000);
     }
   }, [allComplete, showConfetti]);
+
+  // Detect character completion changes and trigger celebrations
+  useEffect(() => {
+    if (loading) return;
+
+    const currentCompletions: Record<string, boolean> = {};
+    characterCompletions.forEach(c => {
+      currentCompletions[c.name] = c.isComplete;
+    });
+
+    // Check for newly completed characters
+    characterCompletions.forEach(c => {
+      const wasComplete = prevCompletionsRef.current[c.name];
+      const isNowComplete = c.isComplete;
+
+      // Only celebrate if it wasn't complete before and is now complete
+      if (!wasComplete && isNowComplete && Object.keys(prevCompletionsRef.current).length > 0) {
+        showCharacterCelebration(c.name as CharacterName);
+      }
+    });
+
+    // Update previous completions reference
+    prevCompletionsRef.current = currentCompletions;
+  }, [characterCompletions, loading, showCharacterCelebration]);
 
   // Convert profile data to graph format for ZEP visualization
   const graphData = {
@@ -246,6 +316,20 @@ export default function ProfilePage() {
 
       {/* Confetti Celebration */}
       <Confetti active={showConfetti} duration={5000} />
+
+      {/* Character Unlock Celebration */}
+      {celebratingCharacter && (
+        <CharacterUnlockCelebration
+          characterName={celebratingCharacter}
+          onComplete={handleCelebrationComplete}
+        />
+      )}
+
+      {/* XP Notifications */}
+      <XPNotificationContainer
+        notifications={xpNotifications}
+        onRemove={removeXPNotification}
+      />
 
       <UnifiedHeader activeSite="jobs" siteNavItems={JOBS_SITE_NAV_ITEMS} />
 
@@ -428,7 +512,7 @@ export default function ProfilePage() {
               Your profile is complete. Now let&apos;s find your perfect role!
             </p>
             <Link
-              href="/esports-jobs"
+              href="/jobs"
               className="inline-block bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-bold py-4 px-8 rounded-lg text-lg hover:opacity-90 transition-opacity animate-glow-pulse"
             >
               Browse Jobs & Assess Your Fit
@@ -453,7 +537,7 @@ export default function ProfilePage() {
                 Open AI Chat
               </Link>
               <Link
-                href="/esports-jobs"
+                href="/jobs"
                 className="inline-block bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg transition-all border border-gray-700"
               >
                 Browse Jobs
