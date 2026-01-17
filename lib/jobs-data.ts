@@ -20,6 +20,8 @@ export interface EsportsJob {
   externalUrl: string;
   source: 'linkedin' | 'workday' | 'company-site';
   category: 'coaching' | 'marketing' | 'production' | 'management' | 'content' | 'operations';
+  // MDX content for rich job displays with CopilotKit graphs and graphics
+  mdx?: string;
 }
 
 // Unique hero images for each job from Unsplash and Pexels

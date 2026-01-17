@@ -8,19 +8,19 @@ import { MUX_VIDEOS, getMuxStreamUrl, getMuxThumbnailUrl } from "../../lib/mux-c
 
 // Target keywords: "gaming recruitment agency", "gaming recruitment agencies", "games recruitment agencies"
 export const metadata: Metadata = {
-  title: "Gaming Recruitment Agency UK 🎮 Recruiters Guide & Jobs",
-  description: "Find gaming recruitment agencies in the UK. Compare specialist games industry recruiters, plus search gaming jobs. Free job search platform for the gaming industry.",
+  title: "Gaming Recruitment Agency | Expert Gaming Industry Recruiters",
+  description: "Find gaming recruitment agencies worldwide. Compare specialist games industry recruiters, plus search gaming jobs. Free job search platform for the gaming industry.",
   keywords: "gaming recruitment agency, gaming recruitment agencies, games recruitment agencies, video game recruiters, gaming industry jobs",
   openGraph: {
-    title: "Gaming Recruitment Agency UK 🎮 Recruiters Guide & Jobs",
-    description: "Find gaming recruitment agencies in the UK. Compare specialist games industry recruiters.",
+    title: "Gaming Recruitment Agency | Expert Gaming Industry Recruiters",
+    description: "Find gaming recruitment agencies worldwide. Compare specialist games industry recruiters.",
     type: "website",
     url: "https://mvp.actor/gaming-recruitment-agency",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Gaming Recruitment Agency UK 🎮 Recruiters Guide & Jobs",
-    description: "Find gaming recruitment agencies in the UK. Compare specialist games recruiters.",
+    title: "Gaming Recruitment Agency | Expert Gaming Industry Recruiters",
+    description: "Find gaming recruitment agencies worldwide. Compare specialist games recruiters.",
   },
   alternates: {
     canonical: "https://mvp.actor/gaming-recruitment-agency",
