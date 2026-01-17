@@ -93,6 +93,10 @@ const HeyCompaniesCompact = dynamic(
   () => import("./components/HeyCompanies").then(mod => ({ default: mod.HeyCompaniesCompact })),
   { loading: () => <div className="h-32 bg-gradient-to-r from-cyan-600/20 to-purple-600/20 rounded-xl animate-pulse" /> }
 );
+const HomeAISummary = dynamic(
+  () => import("./components/HomeAISummary").then(mod => ({ default: mod.HomeAISummary })),
+  { loading: () => <div className="h-32 bg-gradient-to-r from-cyan-900/30 to-purple-900/20 rounded-2xl animate-pulse" /> }
+);
 
 // Types
 interface Job {
@@ -490,10 +494,13 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0f] via-[#0a0a0f]/80 to-[#0d0d15]" />
           </div>
           <div className="relative max-w-4xl mx-auto px-4 text-center">
-            <p className="text-xl md:text-2xl text-gray-300 leading-relaxed">
+            <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-8">
               Leading <strong className="text-cyan-400">esports recruiters</strong> connecting gaming talent with top organisations worldwide.
               Browse <strong className="text-cyan-400">esports jobs</strong> in pro gaming, coaching, content creation, and esports management.
             </p>
+
+            {/* AI Summary */}
+            <HomeAISummary firstName={firstName} jobCount={featuredJobs.length} />
           </div>
         </section>
 
@@ -835,9 +842,9 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-10">
               <h2 className="text-2xl font-bold mb-4">Industry Resources</h2>
-              <p className="text-gray-400">Trusted organisations supporting the <Link href="/" className="text-cyan-400 underline hover:text-cyan-300">esports jobs</Link> ecosystem</p>
+              <p className="text-gray-400">Trusted organisations supporting the <Link href="/" className="text-cyan-400 underline hover:text-cyan-300">esports recruitment agency</Link> ecosystem</p>
             </div>
-            <div className="grid md:grid-cols-4 gap-6">
+            <div className="grid md:grid-cols-4 gap-6 mb-8">
               <a href="https://britishesports.org" target="_blank" rel="noopener noreferrer" className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all text-center">
                 <h3 className="font-bold text-white mb-2">British Esports</h3>
                 <p className="text-gray-400 text-sm">The national body for esports in the UK</p>
@@ -853,6 +860,24 @@ export default function Home() {
               <a href="https://www.riotgames.com/en/work-with-us" target="_blank" rel="noopener noreferrer" className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all text-center">
                 <h3 className="font-bold text-white mb-2">Riot Games Careers</h3>
                 <p className="text-gray-400 text-sm">Jobs at League of Legends publisher</p>
+              </a>
+            </div>
+            <div className="grid md:grid-cols-4 gap-6">
+              <a href="https://www.esportsinsider.com" target="_blank" rel="noopener noreferrer" className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 hover:border-purple-500/50 transition-all text-center">
+                <h3 className="font-bold text-white mb-2">Esports Insider</h3>
+                <p className="text-gray-400 text-sm">Business news and analysis</p>
+              </a>
+              <a href="https://www.gamesindustry.biz" target="_blank" rel="noopener noreferrer" className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 hover:border-purple-500/50 transition-all text-center">
+                <h3 className="font-bold text-white mb-2">GamesIndustry.biz</h3>
+                <p className="text-gray-400 text-sm">Gaming business news</p>
+              </a>
+              <a href="https://liquipedia.net" target="_blank" rel="noopener noreferrer" className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 hover:border-purple-500/50 transition-all text-center">
+                <h3 className="font-bold text-white mb-2">Liquipedia</h3>
+                <p className="text-gray-400 text-sm">Esports wiki and team info</p>
+              </a>
+              <a href="https://igda.org" target="_blank" rel="noopener noreferrer" className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 hover:border-purple-500/50 transition-all text-center">
+                <h3 className="font-bold text-white mb-2">IGDA</h3>
+                <p className="text-gray-400 text-sm">Game Developers Association</p>
               </a>
             </div>
           </div>
@@ -1002,7 +1027,7 @@ export default function Home() {
               <p className="text-xl text-gray-400">Comprehensive guides to help you break into and advance in the esports industry</p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Link href="/esports-jobs" className="p-6 rounded-xl bg-gradient-to-br from-cyan-900/30 to-purple-900/30 border border-cyan-500/20 hover:border-cyan-500/50 transition-all group">
                 <h3 className="text-lg font-bold text-white mb-2 group-hover:text-cyan-400">Esports Jobs</h3>
                 <p className="text-gray-400 text-sm">Browse all esports jobs worldwide from top gaming organisations.</p>
@@ -1019,7 +1044,22 @@ export default function Home() {
                 <h3 className="text-lg font-bold text-white mb-2 group-hover:text-amber-400">Esports Careers</h3>
                 <p className="text-gray-400 text-sm">All career pathways in professional esports.</p>
               </Link>
-              <Link href="/esports-recruitment" className="p-6 rounded-xl bg-gradient-to-br from-pink-900/30 to-blue-900/30 border border-pink-500/20 hover:border-pink-500/50 transition-all group">
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+              <Link href="/gaming-recruitment-agency" className="p-6 rounded-xl bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border border-blue-500/20 hover:border-blue-500/50 transition-all group">
+                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-blue-400">Gaming Recruitment Agency</h3>
+                <p className="text-gray-400 text-sm">Specialist game industry recruiters for all roles.</p>
+              </Link>
+              <Link href="/professional-gaming-teams-recruiting" className="p-6 rounded-xl bg-gradient-to-br from-green-900/30 to-emerald-900/30 border border-green-500/20 hover:border-green-500/50 transition-all group">
+                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-green-400">Teams Recruiting</h3>
+                <p className="text-gray-400 text-sm">Join professional gaming teams looking for talent.</p>
+              </Link>
+              <Link href="/hire-shoutcaster" className="p-6 rounded-xl bg-gradient-to-br from-purple-900/30 to-pink-900/30 border border-purple-500/20 hover:border-purple-500/50 transition-all group">
+                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-purple-400">Hire a Shoutcaster</h3>
+                <p className="text-gray-400 text-sm">Find esports broadcast talent for your events.</p>
+              </Link>
+              <Link href="/esports-recruitment" className="p-6 rounded-xl bg-gradient-to-br from-pink-900/30 to-rose-900/30 border border-pink-500/20 hover:border-pink-500/50 transition-all group">
                 <h3 className="text-lg font-bold text-white mb-2 group-hover:text-pink-400">Recruitment Services</h3>
                 <p className="text-gray-400 text-sm">Professional esports recruitment and talent acquisition.</p>
               </Link>

@@ -1,10 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Metadata } from "next";
 import { UnifiedHeader, JOBS_SITE_NAV_ITEMS } from "../components/UnifiedHeader";
 import { UnifiedFooter } from "../components/UnifiedFooter";
 import { JobSearch } from "../components/JobSearch";
-import { SkillsGraph, SkillsGraphCompact } from "../components/SkillsGraph";
 import { esportsJobs, getAllCategories, EsportsJob, generateJobListingSchema } from "../../lib/jobs-data";
 
 // YouTube videos for job pages - VERIFIED WORKING IDs
@@ -211,7 +209,7 @@ export default async function JobsPage({ searchParams }: PageProps) {
               return (
                 <Link
                   key={category}
-                  href={`/jobs?category=${category}`}
+                  href={`/esports-jobs?category=${category}`}
                   className={`px-4 py-2 rounded-full border text-sm font-medium transition-all hover:scale-105 ${
                     isActive ? categoryColors[category] : "bg-gray-800/50 border-gray-700 text-gray-400"
                   }`}
@@ -348,23 +346,23 @@ export default async function JobsPage({ searchParams }: PageProps) {
       </section>
 
       {/* SEO Content Section - "Esports Jobs" Keyword Optimization */}
-      <section className="py-16 bg-[#0d0d15]">
+      <section className="py-20 bg-[#0d0d15]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold mb-6 text-center">
+          <h2 className="text-3xl font-bold mb-8 text-center">
             Find Your Perfect <span className="text-cyan-400">Esports Job</span>
           </h2>
 
-          <div className="prose prose-lg prose-invert max-w-none space-y-6">
-            <p className="text-gray-300 leading-relaxed">
-              Looking for <strong>esports jobs</strong>? You&apos;ve come to the right place. Our esports job board aggregates the latest opportunities from across the gaming industry, including roles at top organisations like Team Liquid, Fnatic, Cloud9, and major game publishers.
+          <div className="prose prose-lg prose-invert max-w-none space-y-8">
+            <p className="text-gray-300 leading-loose text-lg">
+              Looking for <strong>esports jobs</strong>? You&apos;ve come to the right place. As the leading <Link href="/" className="text-cyan-400 underline hover:text-cyan-300">esports recruitment agency</Link>, we aggregate the latest opportunities from across the gaming industry, including roles at top organisations like Team Liquid, Fnatic, Cloud9, and major game publishers.
             </p>
 
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-gray-400 leading-loose text-lg">
               <strong className="text-white">Esports jobs</strong> span a wide range of roles: from esports coaching positions and analyst roles to esports marketing jobs, content creation, event management, and broadcast production. Whether you&apos;re looking for entry-level esports jobs or senior management positions, we list opportunities for all experience levels.
             </p>
 
-            <h3 className="text-xl font-bold text-white mt-8 mb-4">Types of Esports Jobs We List</h3>
-            <ul className="text-gray-400 space-y-2 list-disc list-inside">
+            <h3 className="text-xl font-bold text-white mt-10 mb-6">Types of Esports Jobs We List</h3>
+            <ul className="text-gray-400 space-y-4 list-disc list-inside text-lg">
               <li><strong className="text-cyan-400">Esports Coaching Jobs</strong> - Train professional players and teams</li>
               <li><strong className="text-cyan-400">Esports Marketing Jobs</strong> - Promote teams, events, and brands</li>
               <li><strong className="text-cyan-400">Esports Production Jobs</strong> - Broadcast and video production roles</li>
@@ -373,21 +371,36 @@ export default async function JobsPage({ searchParams }: PageProps) {
               <li><strong className="text-cyan-400">Esports Operations Jobs</strong> - Event and arena operations</li>
             </ul>
 
-            <p className="text-gray-400 leading-relaxed mt-6">
-              All esports jobs on our board link directly to the employer&apos;s official job posting. We aggregate listings from LinkedIn, Workday, and company career sites to bring you the most comprehensive esports job search experience.
+            <p className="text-gray-400 leading-loose text-lg mt-10">
+              All esports jobs on our board link directly to the employer&apos;s official job posting. We aggregate listings from LinkedIn, Workday, and company career sites to bring you the most comprehensive esports job search experience. Our <Link href="/" className="text-cyan-400 underline hover:text-cyan-300">esports recruitment agency</Link> is here to help you land your dream role.
             </p>
+
+            <div className="mt-10 p-6 rounded-xl bg-gradient-to-r from-cyan-900/20 to-purple-900/20 border border-cyan-500/30">
+              <h3 className="text-lg font-bold text-white mb-4">Trusted Industry Resources</h3>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <a href="https://britishesports.org" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">British Esports</a>
+                <span className="text-gray-600">•</span>
+                <a href="https://esportsinsider.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">Esports Insider</a>
+                <span className="text-gray-600">•</span>
+                <a href="https://ukie.org.uk" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">UKIE</a>
+                <span className="text-gray-600">•</span>
+                <a href="https://www.gamesindustry.biz" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">GamesIndustry.biz</a>
+                <span className="text-gray-600">•</span>
+                <a href="https://liquipedia.net" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">Liquipedia</a>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Browse by Location - Internal Linking for Topic Cluster */}
-      <section className="py-16 bg-[#0a0a0f]">
+      <section className="py-20 bg-[#0a0a0f]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold mb-8 text-center">
+          <h2 className="text-3xl font-bold mb-10 text-center">
             Browse <span className="text-cyan-400">Esports Jobs</span> by Location
           </h2>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
             <Link href="/esports-jobs-usa" className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-blue-500/50 transition-all text-center">
               <span className="text-2xl">🇺🇸</span>
               <span className="text-white font-medium ml-2">USA</span>
@@ -446,13 +459,13 @@ export default async function JobsPage({ searchParams }: PageProps) {
       </section>
 
       {/* Browse by Role - Internal Linking */}
-      <section className="py-16 bg-[#0d0d15]">
+      <section className="py-20 bg-[#0d0d15]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold mb-8 text-center">
+          <h2 className="text-3xl font-bold mb-10 text-center">
             Browse <span className="text-purple-400">Esports Jobs</span> by Role
           </h2>
 
-          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4 mb-10">
             <Link href="/esports-coach-careers" className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-green-500/50 transition-all">
               <span className="text-white font-medium">Coach Jobs</span>
               <p className="text-gray-400 text-sm mt-1">Train professional players</p>

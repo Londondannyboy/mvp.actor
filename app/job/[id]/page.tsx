@@ -87,7 +87,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     .slice(0, 3);
 
   return (
-    <JobPageClient jobId={job.id} jobTitle={job.title} jobCompany={job.company}>
+    <JobPageClient
+      jobId={job.id}
+      jobTitle={job.title}
+      jobCompany={job.company}
+      jobLocation={job.location}
+      jobCategory={job.category}
+      jobSkills={job.skills}
+      jobDescription={job.description}
+      jobType={job.type}
+      jobSalary={job.salary}
+    >
       <main className="min-h-screen bg-[#0a0a0f] text-white">
       {/* JobPosting Schema */}
       <script
@@ -199,23 +209,70 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-3 gap-8">
             {/* Job Description - Main Column */}
-            <div className="md:col-span-2 space-y-8">
+            <div className="md:col-span-2 space-y-12">
               <div>
-                <h2 className="text-2xl font-bold mb-4">About This Esports Job</h2>
+                <h2 className="text-2xl font-bold mb-6">About This Esports Job</h2>
                 <div className="prose prose-lg prose-invert max-w-none">
                   {job.description.split("\n\n").map((paragraph, i) => (
-                    <p key={i} className="text-gray-300 leading-relaxed mb-4">
+                    <p key={i} className="text-gray-300 leading-relaxed mb-6">
                       {paragraph}
                     </p>
                   ))}
                 </div>
               </div>
 
+              {/* Skills Visualization - Main Panel */}
+              <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/50 rounded-2xl p-6 md:p-8 border border-gray-700">
+                <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                  <span className="text-3xl">🎯</span>
+                  Key Skills for This Role
+                </h2>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  {job.skills.map((skill, index) => {
+                    const colors = [
+                      "from-cyan-500 to-cyan-400",
+                      "from-purple-500 to-purple-400",
+                      "from-pink-500 to-pink-400",
+                      "from-green-500 to-green-400",
+                      "from-amber-500 to-amber-400",
+                      "from-blue-500 to-blue-400",
+                    ];
+                    const colorClass = colors[index % colors.length];
+                    const importance = Math.max(70, 95 - (index * 5));
+
+                    return (
+                      <div key={skill} className="group">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-white font-medium group-hover:text-cyan-400 transition-colors">
+                            {skill}
+                          </span>
+                          <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
+                            {importance}% importance
+                          </span>
+                        </div>
+                        <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full bg-gradient-to-r ${colorClass} rounded-full transition-all duration-500 group-hover:shadow-lg`}
+                            style={{ width: `${importance}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-gray-400 text-sm mt-6 pt-4 border-t border-gray-700">
+                  Skills ranked by typical importance for {job.category} roles in esports.
+                  Build these competencies to strengthen your application.
+                </p>
+              </div>
+
               {job.requirements && (
                 <div>
-                  <h2 className="text-2xl font-bold mb-4">Requirements</h2>
+                  <h2 className="text-2xl font-bold mb-6">Requirements</h2>
                   <div className="prose prose-lg prose-invert max-w-none">
-                    <p className="text-gray-300 leading-relaxed">
+                    <p className="text-gray-300 leading-relaxed mb-6">
                       {job.requirements}
                     </p>
                   </div>
@@ -235,8 +292,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               </div>
 
               {/* Related Video */}
-              <div className="mt-8">
-                <h2 className="text-2xl font-bold mb-4">Learn More About Esports Careers</h2>
+              <div className="mt-12">
+                <h2 className="text-2xl font-bold mb-6">Learn More About Esports Careers</h2>
                 <div className="bg-gray-900/50 rounded-xl overflow-hidden border border-gray-700">
                   <div className="aspect-video">
                     <iframe

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useCopilotChat } from '@copilotkit/react-core';
 import { Role, TextMessage } from '@copilotkit/runtime-client-gql';
+import { AISummary } from '../../components/AISummary';
 
 // Lazy load CopilotSidebar
 const CopilotSidebar = dynamic(
@@ -15,10 +16,27 @@ interface JobPageClientProps {
   jobId: string;
   jobTitle: string;
   jobCompany: string;
+  jobLocation: string;
+  jobCategory: string;
+  jobSkills: string[];
+  jobDescription: string;
+  jobType: string;
+  jobSalary?: string;
   children: React.ReactNode;
 }
 
-export function JobPageClient({ jobId, jobTitle, jobCompany, children }: JobPageClientProps) {
+export function JobPageClient({
+  jobId,
+  jobTitle,
+  jobCompany,
+  jobLocation,
+  jobCategory,
+  jobSkills,
+  jobDescription,
+  jobType,
+  jobSalary,
+  children
+}: JobPageClientProps) {
   const [chatOpen, setChatOpen] = useState(false);
   const [isAssessing, setIsAssessing] = useState(false);
   const { appendMessage } = useCopilotChat();
@@ -45,6 +63,20 @@ export function JobPageClient({ jobId, jobTitle, jobCompany, children }: JobPage
 
   const pageContent = (
     <>
+      {/* AI Summary - appears at top of content */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <AISummary
+          jobTitle={jobTitle}
+          company={jobCompany}
+          location={jobLocation}
+          category={jobCategory}
+          skills={jobSkills}
+          description={jobDescription}
+          type={jobType}
+          salary={jobSalary}
+        />
+      </div>
+
       {children}
 
       {/* Floating Assess Button */}
